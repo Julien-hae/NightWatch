@@ -1,0 +1,83 @@
+[tool.poetry]
+name = "NightWatch"
+version = "0.0.0" # Version is ignored and set by Tekton. Use pipeline to increase.
+description = "And now my watch begins"
+authors = ["Haefelin Julien <jhaefelin-git@aliasdesk.ch>"]
+repository = "https://github.com/Julien-hae/NightWatch.git"
+documentation = "https://github.com/Julien-hae/NightWatch/blob/master/README.md"
+packages = [{include = "Nightwatch", from = "src"}]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "~3.11"
+numpy = "~1.26"                                     # NumPy is the fundamental package for array computing with Python.
+
+[tool.poetry.group.dev.dependencies]
+black = "~24"                                       # The uncompromising code formatter.
+coverage = {extras = ["toml"], version = "~7.4"}    # Code coverage measurement for Python
+unittest-xml-reporting = "~3.2"                     # unittest-based test runner with Ant/JUnit like XML reporting.
+pre-commit = "~3.6"                                 # A framework for managing and maintaining multi-language pre-commit hooks.
+pre-commit-hooks = "~4.5"                           # Some out-of-the-box hooks for pre-commit.
+pydocstyle = "~6.3"                                 # Python docstring style checker
+# NOTE: pylint-sonarjson is incompatible with pylint 3.x, hence we can't update yet, see also: https://github.com/omegacen/pylint-sonarjson/pull/12
+pylint = "~2.17"                                    # python code static checker
+pylint-sonarjson = "~1.0"                           # Plugin for pylint to export severities of issues to sonar
+isort = "~5.13"                                     # Tool for reordering python imports
+mypy = "~1.8"                                       # Tool for static type-checking
+
+[tool.poetry.scripts]
+entrypoint = 'Nightwatch.main:cli'
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.isort]
+profile = "black"
+
+[tool.pylint.main]
+load-plugins = "pylint_sonarjson"
+fail-on = "F,E,W"
+fail-under = 0.0
+
+[tool.pylint.basic]
+good-names = ["i", "j", "k", "n", "s", "d", "ex", "Run", "_", "pk", "x", "y", "df"]
+
+[tool.pylint.format]
+max-line-length = 140
+max-args = 8
+
+[tool.pylint.messages_control]
+disable = [
+    # pydocstyle takes care of this...
+    "missing-module-docstring",
+    "missing-function-docstring",
+    "missing-class-docstring",
+
+    # don't hinder me creating small classes!
+    "too-few-public-methods",
+
+    # reorder-python-imports should know what it's doing
+    "wrong-import-order",
+
+    # can't do much about duplicate imports in two files, I'm afraid...
+    "duplicate-code",
+]
+
+[tool.pylint.miscellaneous]
+notes = []  # don't warn about `TODO` and `FIXME` comments
+
+[tool.pylint.reports]
+output-format = "sonarjson:./sonar_report.json,text"
+
+[tool.mypy]
+python_version = "3.11"
+plugins = "numpy.typing.mypy_plugin"
+strict = true
+
+[tool.pydocstyle]
+match-dir = "[^\\.][^test].*"
+convention = "google"
+
+[tool.coverage.run]
+command_line = "-m xmlrunner discover --output-file junittest.xml"
