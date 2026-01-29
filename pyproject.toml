@@ -13,17 +13,13 @@ python = "~3.11"
 numpy = "~1.26"                                     # NumPy is the fundamental package for array computing with Python.
 
 [tool.poetry.group.dev.dependencies]
-black = "~24"                                       # The uncompromising code formatter.
 coverage = {extras = ["toml"], version = "~7.4"}    # Code coverage measurement for Python
 unittest-xml-reporting = "~3.2"                     # unittest-based test runner with Ant/JUnit like XML reporting.
 pre-commit = "~3.6"                                 # A framework for managing and maintaining multi-language pre-commit hooks.
 pre-commit-hooks = "~4.5"                           # Some out-of-the-box hooks for pre-commit.
-pydocstyle = "~6.3"                                 # Python docstring style checker
 # NOTE: pylint-sonarjson is incompatible with pylint 3.x, hence we can't update yet, see also: https://github.com/omegacen/pylint-sonarjson/pull/12
-pylint = "~2.17"                                    # python code static checker
-pylint-sonarjson = "~1.0"                           # Plugin for pylint to export severities of issues to sonar
-isort = "~5.13"                                     # Tool for reordering python imports
 mypy = "~1.8"                                       # Tool for static type-checking
+ruff = "^0.14.14"
 
 [tool.poetry.scripts]
 entrypoint = 'Nightwatch.main:cli'
