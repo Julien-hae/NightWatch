@@ -28,52 +28,63 @@ entrypoint = 'Nightwatch.main:cli'
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
-[tool.isort]
-profile = "black"
-
-[tool.pylint.main]
-load-plugins = "pylint_sonarjson"
-fail-on = "F,E,W"
-fail-under = 0.0
-
-[tool.pylint.basic]
-good-names = ["i", "j", "k", "n", "s", "d", "ex", "Run", "_", "pk", "x", "y", "df"]
-
-[tool.pylint.format]
-max-line-length = 140
-max-args = 8
-
-[tool.pylint.messages_control]
-disable = [
-    # pydocstyle takes care of this...
-    "missing-module-docstring",
-    "missing-function-docstring",
-    "missing-class-docstring",
-
-    # don't hinder me creating small classes!
-    "too-few-public-methods",
-
-    # reorder-python-imports should know what it's doing
-    "wrong-import-order",
-
-    # can't do much about duplicate imports in two files, I'm afraid...
-    "duplicate-code",
-]
-
-[tool.pylint.miscellaneous]
-notes = []  # don't warn about `TODO` and `FIXME` comments
-
-[tool.pylint.reports]
-output-format = "sonarjson:./sonar_report.json,text"
-
 [tool.mypy]
 python_version = "3.11"
 plugins = "numpy.typing.mypy_plugin"
 strict = true
 
-[tool.pydocstyle]
-match-dir = "[^\\.][^test].*"
-convention = "google"
-
 [tool.coverage.run]
 command_line = "-m xmlrunner discover --output-file junittest.xml"
+
+[tool.ruff]
+line-length = 140
+indent-width = 4
+
+exclude = [
+    ".git",
+    ".git-rewrite",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".pyenv",
+    ".pytype",
+    ".ruff_cache",
+    ".venv",
+    ".vscode",
+    "**/*.yaml",
+    "**/*.yml"
+]
+
+[tool.ruff.format]
+# Like Black, use double quotes for strings.
+quote-style = "double"
+
+# Like Black, indent with spaces, rather than tabs.
+indent-style = "space"
+
+# Like Black, respect magic trailing commas.
+skip-magic-trailing-comma = false
+
+# Like Black, automatically detect the appropriate line ending.
+line-ending = "auto"
+
+[tool.ruff.lint]
+select = [
+    "D", "E", "W",  # Pydocstyle rules
+    "I",            # Isort rules
+    "PL",           # Pylint rules
+    "F",            # Pyflake
+    "N",            # Pep8-naming
+    "G",            # Flake8-logging-format
+    "ARG",          # Flake8-unused-arguments
+    ]
+ignore=[]
+fixable = ["I"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["D", "E", "W"] # Ignore Pydocstyle warnings & errors in "test/*" directory
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.pylint]
+max-args = 8
