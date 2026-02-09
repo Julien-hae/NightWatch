@@ -11,6 +11,9 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "~3.11"
 numpy = "~1.26"                                     # NumPy is the fundamental package for array computing with Python.
+alpaca-py = "^0.43.2"
+pytz = "^2025.2"
+python-dotenv = "^1.2.1"
 
 [tool.poetry.group.dev.dependencies]
 coverage = {extras = ["toml"], version = "~7.4"}    # Code coverage measurement for Python
@@ -20,6 +23,7 @@ pre-commit-hooks = "~4.5"                           # Some out-of-the-box hooks 
 # NOTE: pylint-sonarjson is incompatible with pylint 3.x, hence we can't update yet, see also: https://github.com/omegacen/pylint-sonarjson/pull/12
 mypy = "~1.8"                                       # Tool for static type-checking
 ruff = "^0.14.14"
+ipykernel = "^7.2.0"
 
 [tool.poetry.scripts]
 entrypoint = 'Nightwatch.main:cli'
