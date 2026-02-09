@@ -2,20 +2,40 @@
 
 # NightWatch
 
-This is a blueprint for Python based projects. It exemplifies a setup and project structure including neat things such as pre-commit-hooks, automated testing, type checking, etc. It is intended to be tailored to project needs.
+Night gathers, and now my watch begins. It shall not end until my portfolio dies. I shall take no emotional trades, hold no bags, chase no pumps. I shall wear no FOMO and win no glory. I shall live and die at my terminal. I am the bot in the darkness. I am the watcher on the charts. I am the shield that guards the realms of profit. I pledge my code and honor to the Night Watch, for this night and all the nights to come.
 
+## Process (DAG)
+
+```mermaid
+graph LR
+    %% Node Definitions
+    Fetch[/Alpaca API/]
+    Fetch --> Kill{Kill Switch?}
+
+    Kill -- Yes --> Stop[🛑 Halt]
+    Kill -- No --> Strat{Strategy?}
+
+    Strat -- HOLD --> Fetch
+    Strat -- BUY / SELL --> Risk{Risk Check?}
+
+    Risk -- Blocked --> Log[📝 Log Reason]
+
+    Risk -- Approved --> Exec[🚀 Execute]
+    Exec --> Fetch
+
+    %% Styling
+    classDef red fill:#ffcdd2,stroke:#b71c1c,stroke-width:2px,color:#b71c1c;
+    classDef green fill:#c8e6c9,stroke:#1b5e20,stroke-width:2px,color:#1b5e20;
+    classDef blue fill:#bbdefb,stroke:#0d47a1,stroke-width:2px,color:#0d47a1;
+    classDef default fill:#f5f5f5,stroke:#333,stroke-width:1px;
+
+    class Kill,Stop,Log red;
+    class Exec green;
+    class Strat,Risk blue;
+```
 
 ## Getting Started
 
-After runnig the Cookiecutter script, you'll have to create a repository to add your code to Github:
-```shell
-git init
-git add --all
-git commit -m "Initial commit"
-git remote add origin git@github.com:Julien-hae/NightWatch.git
-git branch -M master
-git push -u origin master
-```
 This is a basic project you can fork. So far, the only things it can do is just "Hello World" but you can call it directly in the terminal after the installation using the command `poetry run entrypoint -w World`
 
 ## Setup
