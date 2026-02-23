@@ -89,6 +89,13 @@ class TestKrakenAdapter(unittest.TestCase):
         self.adapter.subscribe()
         self.assertTrue(mock_ws.send.called)
 
+    def test_close(self) -> None:
+        """Test the close method of the KrakenAdapter class."""
+        mock_ws = AsyncMock()
+        self.adapter.websocket = mock_ws
+        self.adapter.close()
+        mock_ws.close.assert_called_once()
+
     def test_integration_receive_at_least_one_message(self) -> None:
         """
         Integration test: Connect to Kraken, subscribe to BTC/USD, and receive at least 1 message within 10 seconds.
@@ -110,7 +117,7 @@ class TestKrakenAdapter(unittest.TestCase):
                         break
             finally:
                 if adapter.websocket:
-                    await adapter.websocket.close()
+                    await adapter._close_async()
             return messages
 
         messages = asyncio.run(asyncio.wait_for(run_integration(), timeout=10))
@@ -142,7 +149,7 @@ class TestKrakenAdapter(unittest.TestCase):
                                 break
             finally:
                 if adapter.websocket:
-                    await adapter.websocket.close()
+                    await adapter._close_async()
             return market_tick
 
         market_tick = asyncio.run(asyncio.wait_for(run_integration(), timeout=15))

@@ -60,3 +60,16 @@ class KrakenAdapter(ExchangeMarketAdapter):
                     symbol=message["data"][0].get("symbol", ""), price=float(message["data"][0].get("last", 0)), timestamp=aware_utc_dt
                 )
         return None
+
+    async def _close_async(self) -> None:
+        """Asynchronously close the Kraken websocket connection, if open."""
+        if self.websocket is not None:
+            try:
+                await self.websocket.close()
+            finally:
+                self.websocket = None
+
+    def close(self) -> None:
+        """Close the Kraken websocket connection."""
+        if self.websocket is not None:
+            asyncio.run(self._close_async())

@@ -27,6 +27,10 @@ class ExchangeMarketAdapter:
         """Subscribe to a symbol to receive live stock data."""
         raise NotImplementedError("Method not implemented yet.")
 
+    def close(self) -> None:
+        """Close the websocket connection."""
+        raise NotImplementedError("Method not implemented yet.")
+
     def parse_message(self, message: Optional[Dict[str, Any]]) -> Optional[MarketTick]:
         """Parse a message received from the websocket and return a MarketTick object."""
         raise NotImplementedError("Method not implemented yet.")
