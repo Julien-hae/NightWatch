@@ -3,6 +3,7 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from typing import Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -13,7 +14,7 @@ class MarketTick(BaseModel):
     uid: uuid.UUID = uuid.uuid4()
     timestamp: datetime
     symbol: str
-    price: Decimal = Field(ge=0)
+    price: Union[Decimal, float] = Field(ge=0)
     source: str
     schema_version: int
 

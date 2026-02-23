@@ -12,7 +12,7 @@ class TestMarketTick(unittest.TestCase):
 
     def setUp(self) -> None:
         """Set up the MarketTick instance for testing."""
-        self.market_tick = MarketTick(symbol="BTC/USD", price=50000.0, timestamp=datetime.now(), source="Kraken", schema_version=1)  # type: ignore[arg-type]
+        self.market_tick = MarketTick(symbol="BTC/USD", price=50000.0, timestamp=datetime.now(), source="Kraken", schema_version=1)
 
     def test_market_tick_fields(self) -> None:
         """Test that the MarketTick fields are set correctly."""
@@ -37,7 +37,7 @@ class TestMarketTick(unittest.TestCase):
     def test_negative_price(self) -> None:
         """Test that a negative price raises a validation error."""
         with self.assertRaises(ValueError):
-            MarketTick(symbol="BTC/USD", price=-100.0, timestamp=datetime.now(), source="Kraken", schema_version=1)  # type: ignore[arg-type]
+            MarketTick(symbol="BTC/USD", price=-100.0, timestamp=datetime.now(), source="Kraken", schema_version=1)
 
     def test_missing_fields(self) -> None:
         """Test that missing required fields raise a validation error."""
