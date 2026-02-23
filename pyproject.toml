@@ -14,6 +14,7 @@ numpy = "~1.26"                                     # NumPy is the fundamental p
 alpaca-py = "^0.43.2"
 pytz = "^2025.2"
 python-dotenv = "^1.2.1"
+websockets = "^16.0"
 
 [tool.poetry.group.dev.dependencies]
 coverage = {extras = ["toml"], version = "~7.4"}    # Code coverage measurement for Python

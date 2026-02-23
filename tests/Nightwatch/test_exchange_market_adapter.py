@@ -1,10 +1,8 @@
+"""Tests for the ExchangeMarketAdapter class."""
+
 import unittest
 
-from dotenv import load_dotenv
-
 from Nightwatch.exchange_market_adapter import ExchangeMarketAdapter, MarketTick
-
-load_dotenv("credentials.env")
 
 
 class TestExchangeMarketAdapter(unittest.TestCase):
@@ -28,5 +26,5 @@ class TestExchangeMarketAdapter(unittest.TestCase):
     def test_return_value_parse_message(self) -> None:
         """Test the return value of the parse_message method of the ExchangeMarketAdapter class."""
         adapter = ExchangeMarketAdapter()
-        market_tick = adapter.parse_message()
+        market_tick = adapter.parse_message(message=None)
         self.assertIsInstance(market_tick, MarketTick)
