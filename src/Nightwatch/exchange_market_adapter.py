@@ -18,7 +18,6 @@ class ExchangeMarketAdapter:
 
     def __init__(self) -> None:
         """Initialize the ExchangeMarketAdapter class."""
-        pass
 
     def connect(self) -> None:
         """Connect to a websocket to receive live stock data."""
@@ -30,5 +29,4 @@ class ExchangeMarketAdapter:
 
     def parse_message(self, message: Optional[Dict[str, Any]]) -> Optional[MarketTick]:
         """Parse a message received from the websocket and return a MarketTick object."""
-        _ = message
-        return MarketTick(symbol="", price=0.0, timestamp=None)
+        raise NotImplementedError("Method not implemented yet.")

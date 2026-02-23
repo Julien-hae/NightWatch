@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytz  # type: ignore[import-untyped]
 
+from Nightwatch.exchange_market_adapter import MarketTick
 from Nightwatch.kraken_adapter import KrakenAdapter
 
 
@@ -45,6 +46,7 @@ class TestKrakenAdapter(unittest.TestCase):
         market_tick = self.adapter.parse_message(message)
         if market_tick is None:
             self.fail("parse_message returned None for a valid message")
+        self.assertIsInstance(market_tick, MarketTick)
         self.assertEqual(market_tick.symbol, "BTC/USD")
         self.assertEqual(market_tick.price, 0.10035)
         data_list = message["data"]

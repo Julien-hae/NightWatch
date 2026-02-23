@@ -15,12 +15,12 @@ from Nightwatch.exchange_market_adapter import ExchangeMarketAdapter, MarketTick
 class KrakenAdapter(ExchangeMarketAdapter):
     """Adapter to ingest live stock data from the Kraken API."""
 
-    def __init__(self) -> None:
+    def __init__(self, symbol: str = "BTC/USD") -> None:
         """Initialize the KrakenAdapter class."""
         super().__init__()
         self.websocket: Optional[ClientConnection] = None
         self.uri = "wss://ws.kraken.com/v2"
-        self.symbol = "BTC/USD"
+        self.symbol = symbol
 
     async def _connect_async(self) -> None:
         """Asynchronously connect to the Kraken websocket."""
