@@ -43,3 +43,10 @@ class TestMarketTick(unittest.TestCase):
         """Test that missing required fields raise a validation error."""
         with self.assertRaises(ValueError):
             MarketTick(timestamp=datetime.now(), source="Kraken", schema_version=1)  # type: ignore[call-arg]
+
+    def test_uid_is_unique_per_instance(self) -> None:
+        """Test that each MarketTick instance gets a unique uid."""
+        tick2 = MarketTick(symbol="BTC/USD", price=50000.0, timestamp=datetime.now(), source="Kraken", schema_version=1)
+        self.assertIsInstance(self.market_tick.uid, uuid.UUID)
+        self.assertIsInstance(tick2.uid, uuid.UUID)
+        self.assertNotEqual(self.market_tick.uid, tick2.uid)

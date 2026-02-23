@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class MarketTick(BaseModel):
     """Model to represent a market tick."""
 
-    uid: uuid.UUID = uuid.uuid4()
+    uid: uuid.UUID = Field(default_factory=uuid.uuid4)
     timestamp: datetime
     symbol: str
     price: Union[Decimal, float] = Field(ge=0)
