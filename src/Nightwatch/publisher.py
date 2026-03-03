@@ -73,7 +73,7 @@ class MarketTickPublisher:
     async def publish(self, tick: MarketTick, *, flush: bool = True) -> str:
         """Publish a MarketTick to the appropriate subject. Returns the subject used."""
         subject = self.subject_for(tick)
-        payload = tick.json().encode("utf-8")
+        payload = tick.model_dump_json().encode("utf-8")
         await self._nc.publish(subject, payload)
         if flush:
             await self._nc.flush(timeout=2)
