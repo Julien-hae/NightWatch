@@ -15,6 +15,7 @@ alpaca-py = "^0.43.2"
 pytz = "^2025.2"
 python-dotenv = "^1.2.1"
 websockets = "^16.0"
+nats-py = "^2.13.1"
 
 [tool.poetry.group.dev.dependencies]
 coverage = {extras = ["toml"], version = "~7.4"}    # Code coverage measurement for Python

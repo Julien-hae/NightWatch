@@ -972,6 +972,23 @@ files = [
 ]
 
 [[package]]
+name = "nats-py"
+version = "2.13.1"
+description = "NATS client for Python"
+optional = false
+python-versions = ">=3.7"
+groups = ["main"]
+files = [
+    {file = "nats_py-2.13.1-py3-none-any.whl", hash = "sha256:838590cd4d3fae141fb3332c16c9861e0831b053a29cd844d51d1104dfc5b4d9"},
+    {file = "nats_py-2.13.1.tar.gz", hash = "sha256:68a0afe018bdaa12740e0ae8c5a94e1937126d4901ae656afc382e2b3ab40005"},
+]
+
+[package.extras]
+aiohttp = ["aiohttp"]
+fast-parse = ["fast-mail-parser"]
+nkeys = ["nkeys"]
+
+[[package]]
 name = "nest-asyncio"
 version = "1.6.0"
 description = "Patch asyncio to allow nested event loops"
@@ -2047,4 +2064,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = "~3.11"
-content-hash = "9e8b79ff9c344b8b12bc6297acfafdb9ce7d1686a92a649998083e104ec0efe2"
+content-hash = "75369860b37840ddbb9e11c965100906314a7baa456a9bf6d7e9e3d87d09216f"
