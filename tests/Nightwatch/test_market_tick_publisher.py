@@ -45,7 +45,17 @@ class NatsServerFixture:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        time.sleep(0.4)
+        deadline = time.monotonic() + 5.0
+        while True:
+            if self._proc is not None and self._proc.poll() is not None:
+                raise RuntimeError("nats-server process exited before it became ready")
+            try:
+                with socket.create_connection(("127.0.0.1", self.port), timeout=0.5):
+                    break
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("Timed out waiting for nats-server to become ready") from None
+                time.sleep(0.05)
 
     def stop(self) -> None:
         """Gracefully stop nats-server (SIGTERM)."""
@@ -132,7 +142,7 @@ class TestMarketTickPublisherIntegration(unittest.TestCase):
                 msg = await sub.next_msg(timeout=2)
                 received.append(msg.data)
             except asyncio.TimeoutError:
-                pass
+                self.fail("Timed out waiting for NATS message on subject 'market.tick.BTCUSD' within 2 seconds")
 
             self.assertEqual(len(received), 1, "Expected exactly one message")
             payload = json.loads(received[0])

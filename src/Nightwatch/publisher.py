@@ -1,7 +1,7 @@
 """Defines the MarketTickPublisher class for publishing MarketTick data to a NATS server."""
 
 import re
-from typing import Any, Awaitable, Callable, Dict, Optional, Sequence
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Sequence
 
 from nats.aio.client import Client as NatsClient
 
@@ -24,12 +24,10 @@ class MarketTickPublisher:
         reconnect_time_wait: float = 0.2,
         ping_interval: int = 10,
         max_outstanding_pings: int = 2,
-    ):
+    ) -> None:
         """Initialize the MarketTickPublisher with NATS connection parameters."""
-        self._servers = list(servers)
-        self._nc = NatsClient()
-        self.disconnected_event = None
-        self.reconnected_event = None
+        self._servers: List[str] = list(servers)
+        self._nc: NatsClient = NatsClient()
         self._connect_kwargs: Dict[str, Any] = dict(
             servers=self._servers,
             allow_reconnect=allow_reconnect,
