@@ -159,3 +159,4 @@ out.csv
 *.tmp
 dependency-check-report.*
 *.env
+*.jsonl
