@@ -1,8 +1,8 @@
 """FastAPI application exposing health and Prometheus metrics endpoints."""
 
 from fastapi import FastAPI
-from fastapi.responses import PlainTextResponse
-from prometheus_client import generate_latest
+from fastapi.responses import Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.service_health import ServiceHealth
@@ -34,9 +34,9 @@ def create_app(
             "nats_connected": _health.nats_connected,
         }
 
-    @app.get("/metrics", response_class=PlainTextResponse)
-    def prometheus_metrics() -> bytes:
+    @app.get("/metrics")
+    def prometheus_metrics() -> Response:
         """Return Prometheus-format metrics."""
-        return generate_latest(_metrics.registry)
+        return Response(content=generate_latest(_metrics.registry), media_type=CONTENT_TYPE_LATEST)
 
     return app
