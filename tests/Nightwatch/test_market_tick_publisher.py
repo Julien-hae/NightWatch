@@ -2,9 +2,6 @@
 
 import asyncio
 import json
-import socket
-import subprocess
-import time
 import unittest
 from collections.abc import Coroutine
 from datetime import datetime, timezone
@@ -13,63 +10,7 @@ from typing import Any
 from nats.aio.client import Client as NatsClient
 
 from Nightwatch.models.market_tick import MarketTick
-from Nightwatch.publisher import MarketTickPublisher
-
-
-def _free_port() -> int:
-    """Find a free TCP port on localhost."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
-        retour: int = s.getsockname()[1]
-        return retour
-
-
-class NatsServerFixture:
-    """Manage a temporary nats-server process for integration tests."""
-
-    def __init__(self) -> None:
-        self.port: int = 0
-        self._proc: subprocess.Popen | None = None  # type: ignore[type-arg]
-
-    @property
-    def url(self) -> str:
-        """Return the NATS connection URL."""
-        return f"nats://127.0.0.1:{self.port}"
-
-    def start(self) -> None:
-        """Start nats-server on a random free port (or reuse the previous port on restart)."""
-        if self.port == 0:
-            self.port = _free_port()
-        self._proc = subprocess.Popen(
-            ["nats-server", "-p", str(self.port)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        deadline = time.monotonic() + 5.0
-        while True:
-            if self._proc is not None and self._proc.poll() is not None:
-                raise RuntimeError("nats-server process exited before it became ready")
-            try:
-                with socket.create_connection(("127.0.0.1", self.port), timeout=0.5):
-                    break
-            except OSError:
-                if time.monotonic() >= deadline:
-                    raise TimeoutError("Timed out waiting for nats-server to become ready") from None
-                time.sleep(0.05)
-
-    def stop(self) -> None:
-        """Gracefully stop nats-server (SIGTERM)."""
-        if self._proc is not None:
-            self._proc.terminate()
-            self._proc.wait(timeout=5)
-            self._proc = None
-
-    def kill(self) -> None:
-        """Force-kill nats-server (SIGKILL) to simulate a crash."""
-        if self._proc is not None:
-            self._proc.kill()
-            self._proc.wait(timeout=5)
-            self._proc = None
+from Nightwatch.publisher import MarketTickPublisher, NatsServerFixture
 
 
 class TestMarketTickPublisherIntegration(unittest.TestCase):

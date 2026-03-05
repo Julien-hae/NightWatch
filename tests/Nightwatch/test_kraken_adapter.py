@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytz  # type: ignore[import-untyped]
 
-from Nightwatch.exchange_market_adapter import MarketTick
 from Nightwatch.kraken_adapter import KrakenAdapter
+from Nightwatch.models.market_tick import MarketTick
 
 
 class TestKrakenAdapter(unittest.TestCase):
@@ -103,21 +103,20 @@ class TestKrakenAdapter(unittest.TestCase):
         """
 
         async def run_integration() -> List[str]:
-            adapter = KrakenAdapter()
-            await adapter._connect_async()
-            await adapter._subscribe_async()
-            if adapter.websocket is None:
+            await self.adapter._connect_async()
+            await self.adapter._subscribe_async()
+            if self.adapter.websocket is None:
                 raise ConnectionError("WebSocket not connected. Call connect() first.")
 
             messages = []
             try:
-                async for message in adapter.websocket:
+                async for message in self.adapter.websocket:
                     if isinstance(message, str):
                         messages.append(message)
                         break
             finally:
-                if adapter.websocket:
-                    await adapter._close_async()
+                if self.adapter.websocket:
+                    await self.adapter._close_async()
             return messages
 
         messages = asyncio.run(asyncio.wait_for(run_integration(), timeout=10))
@@ -130,26 +129,25 @@ class TestKrakenAdapter(unittest.TestCase):
         """
 
         async def run_integration() -> Any:
-            adapter = KrakenAdapter()
-            await adapter._connect_async()
-            await adapter._subscribe_async()
+            await self.adapter._connect_async()
+            await self.adapter._subscribe_async()
 
-            if not adapter.websocket:
+            if not self.adapter.websocket:
                 raise ConnectionError("WebSocket not connected. Call connect() first.")
 
             market_tick = None
             try:
-                async for tmp_message in adapter.websocket:
+                async for tmp_message in self.adapter.websocket:
                     if isinstance(tmp_message, str):
                         print(f"Received message: {tmp_message}")
                         message = json.loads(tmp_message)
                         if message.get("channel", "") == "ticker":
-                            market_tick = adapter.parse_message(message)
+                            market_tick = self.adapter.parse_message(message)
                             if market_tick:
                                 break
             finally:
-                if adapter.websocket:
-                    await adapter._close_async()
+                if self.adapter.websocket:
+                    await self.adapter._close_async()
             return market_tick
 
         market_tick = asyncio.run(asyncio.wait_for(run_integration(), timeout=15))

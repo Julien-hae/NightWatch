@@ -2,15 +2,7 @@
 
 from typing import Any, Dict, Optional
 
-
-class MarketTick:
-    """Class to represent a market tick."""
-
-    def __init__(self, symbol: str, price: float, timestamp: Optional[Any]) -> None:
-        """Initialize the MarketTick class."""
-        self.symbol = symbol
-        self.price = price
-        self.timestamp = timestamp
+from Nightwatch.models.market_tick import MarketTick
 
 
 class ExchangeMarketAdapter:
