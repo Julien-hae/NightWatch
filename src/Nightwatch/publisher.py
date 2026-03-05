@@ -105,8 +105,8 @@ class NatsServerFixture:
         """Find a free TCP port on localhost."""
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(("127.0.0.1", 0))
-            retour: int = s.getsockname()[1]
-            return retour
+            port: int = s.getsockname()[1]
+            return port
 
     def start(self) -> None:
         """Start nats-server on a random free port (or reuse the previous port on restart)."""
