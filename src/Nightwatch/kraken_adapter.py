@@ -3,13 +3,14 @@
 import asyncio
 import json
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, AsyncIterator, Dict, Optional
 
 import pytz  # type: ignore[import-untyped]
 from websockets import connect
 from websockets.asyncio.client import ClientConnection
 
-from Nightwatch.exchange_market_adapter import ExchangeMarketAdapter, MarketTick
+from Nightwatch.exchange_market_adapter import ExchangeMarketAdapter
+from Nightwatch.models.market_tick import MarketTick
 
 
 class KrakenAdapter(ExchangeMarketAdapter):
@@ -51,13 +52,17 @@ class KrakenAdapter(ExchangeMarketAdapter):
         asyncio.run(self._subscribe_async())
 
     def parse_message(self, message: Optional[Dict[str, Any]]) -> Optional[MarketTick]:
-        """Parse a message received from the websocket and return a MarketTick object."""
+        """Parse a message received from the websocket and return a MarketTick, or None for non-ticker messages."""
         if isinstance(message, dict) and message.get("data", None) is not None:
             if message.get("channel", "") == "ticker":
                 naive_dt = datetime.fromisoformat(message["data"][0]["timestamp"].replace("Z", "+00:00"))
                 aware_utc_dt = naive_dt.replace(tzinfo=pytz.utc)
                 return MarketTick(
-                    symbol=message["data"][0].get("symbol", ""), price=float(message["data"][0].get("last", 0)), timestamp=aware_utc_dt
+                    symbol=message["data"][0].get("symbol", ""),
+                    price=float(message["data"][0].get("last", 0)),
+                    timestamp=aware_utc_dt,
+                    source="Kraken",
+                    schema_version=1,
                 )
         return None
 
@@ -73,3 +78,28 @@ class KrakenAdapter(ExchangeMarketAdapter):
         """Close the Kraken websocket connection."""
         if self.websocket is not None:
             asyncio.run(self._close_async())
+
+    async def stream_ticks(self) -> AsyncIterator[MarketTick]:
+        """Yield a continuous stream of validated pydantic MarketTick objects.
+
+        Connects and subscribes automatically on first call.
+        Skips control / heartbeat messages.
+        Runs indefinitely until the caller breaks out or the websocket closes.
+        """
+        if self.websocket is None:
+            await self._connect_async()
+            await self._subscribe_async()
+
+        while True:
+            assert self.websocket is not None
+            raw = await asyncio.wait_for(self.websocket.recv(), timeout=15)
+            parsed = self.parse_message(json.loads(raw))
+            if parsed is not None:
+                assert parsed.timestamp is not None
+                yield MarketTick(
+                    timestamp=parsed.timestamp,
+                    symbol=parsed.symbol,
+                    price=parsed.price,
+                    source="Kraken",
+                    schema_version=1,
+                )
