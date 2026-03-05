@@ -8,6 +8,7 @@ import json
 import time
 import unittest
 from collections.abc import Coroutine
+from decimal import Decimal
 from typing import Any
 
 from nats.aio.client import Client as NatsClient
@@ -64,7 +65,7 @@ class TestPriceIngestionIntegration(unittest.TestCase):
             self.assertIsInstance(tick, MarketTick)
             subject = await self.publisher.publish(tick)
             self.assertEqual(subject, "market.tick.BTCUSD")
-            self.assertGreater(float(tick.price), 0)
+            self.assertGreater(Decimal(tick.price), 0)
 
         self._run(_test())
 
@@ -83,14 +84,14 @@ class TestPriceIngestionIntegration(unittest.TestCase):
             payload = json.loads(msg.data)
 
             self.assertEqual(payload["symbol"], tick.symbol)
-            self.assertEqual(float(payload["price"]), float(tick.price))
+            self.assertEqual(Decimal(payload["price"]), Decimal(tick.price))
             self.assertEqual(payload["source"], "Kraken")
             self.assertEqual(payload["schema_version"], 1)
 
             # Round-trip: reconstruct a MarketTick from the payload
             reconstructed = MarketTick(**payload)
             self.assertEqual(reconstructed.uid, tick.uid)
-            self.assertEqual(float(reconstructed.price), float(tick.price))
+            self.assertEqual(Decimal(reconstructed.price), Decimal(tick.price))
 
             await sub_client.drain()
 

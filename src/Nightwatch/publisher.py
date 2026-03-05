@@ -120,8 +120,7 @@ class NatsServerFixture:
             )
         except FileNotFoundError as exc:
             raise RuntimeError(
-                "nats-server executable not found. Ensure nats-server is installed "
-                "and available in PATH before running integration tests."
+                "nats-server executable not found. Ensure nats-server is installed and available in PATH before running integration tests."
             ) from exc
         deadline = time.monotonic() + 5.0
         while True:

@@ -3,6 +3,7 @@
 import asyncio
 import json
 from datetime import datetime
+from decimal import Decimal
 from typing import Any, AsyncIterator, Dict, Optional
 
 import pytz  # type: ignore[import-untyped]
@@ -59,7 +60,7 @@ class KrakenAdapter(ExchangeMarketAdapter):
                 aware_utc_dt = naive_dt.replace(tzinfo=pytz.utc)
                 return MarketTick(
                     symbol=message["data"][0].get("symbol", ""),
-                    price=float(message["data"][0].get("last", 0)),
+                    price=Decimal(message["data"][0].get("last", 0)),
                     timestamp=aware_utc_dt,
                     source="Kraken",
                     schema_version=1,
