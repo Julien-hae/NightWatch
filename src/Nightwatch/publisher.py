@@ -112,11 +112,17 @@ class NatsServerFixture:
         """Start nats-server on a random free port (or reuse the previous port on restart)."""
         if self.port == 0:
             self.port = self._free_port()
-        self._proc = subprocess.Popen(
-            ["nats-server", "-p", str(self.port)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        try:
+            self._proc = subprocess.Popen(
+                ["nats-server", "-p", str(self.port)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                "nats-server executable not found. Ensure nats-server is installed "
+                "and available in PATH before running integration tests."
+            ) from exc
         deadline = time.monotonic() + 5.0
         while True:
             if self._proc is not None and self._proc.poll() is not None:
