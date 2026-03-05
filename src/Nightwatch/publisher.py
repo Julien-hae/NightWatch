@@ -94,7 +94,7 @@ class NatsServerFixture:
     def __init__(self) -> None:
         """Initialize the NatsServerFixture."""
         self.port: int = 0
-        self._proc: subprocess.Popen | None = None  # type: ignore[type-arg]
+        self._proc: subprocess.Popen[bytes] | None = None
 
     @property
     def url(self) -> str:
