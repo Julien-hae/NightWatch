@@ -75,7 +75,7 @@ class TestKrakenAdapter(unittest.TestCase):
         mock_ws = AsyncMock()
         mock_connect.return_value = mock_ws
         asyncio.run(self.adapter.connect())
-        mock_connect.assert_called_once_with(self.adapter.uri)
+        mock_connect.assert_called_once_with(self.adapter.uri, max_size=1048576)
         self.assertEqual(self.adapter.websocket, mock_ws)
 
     def test_subscribe(self) -> None:

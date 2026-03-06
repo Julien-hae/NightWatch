@@ -3,6 +3,7 @@
 import unittest
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
 from Nightwatch.models.market_tick import MarketTick
 
@@ -12,12 +13,14 @@ class TestMarketTick(unittest.TestCase):
 
     def setUp(self) -> None:
         """Set up the MarketTick instance for testing."""
-        self.market_tick = MarketTick(symbol="BTC/USD", price=50000.0, timestamp=datetime.now(), source="Kraken", schema_version=1)
+        self.market_tick = MarketTick(
+            symbol="BTC/USD", price=Decimal("50000.0"), timestamp=datetime.now(), source="Kraken", schema_version=1
+        )
 
     def test_market_tick_fields(self) -> None:
         """Test that the MarketTick fields are set correctly."""
         self.assertEqual(self.market_tick.symbol, "BTC/USD")
-        self.assertEqual(self.market_tick.price, 50000.0)
+        self.assertEqual(self.market_tick.price, Decimal("50000.0"))
         self.assertEqual(self.market_tick.source, "Kraken")
         self.assertEqual(self.market_tick.schema_version, 1)
         self.assertIsInstance(self.market_tick.timestamp, datetime)
@@ -37,7 +40,7 @@ class TestMarketTick(unittest.TestCase):
     def test_negative_price(self) -> None:
         """Test that a negative price raises a validation error."""
         with self.assertRaises(ValueError):
-            MarketTick(symbol="BTC/USD", price=-100.0, timestamp=datetime.now(), source="Kraken", schema_version=1)
+            MarketTick(symbol="BTC/USD", price=Decimal("-100.0"), timestamp=datetime.now(), source="Kraken", schema_version=1)
 
     def test_missing_fields(self) -> None:
         """Test that missing required fields raise a validation error."""
@@ -46,7 +49,13 @@ class TestMarketTick(unittest.TestCase):
 
     def test_uid_is_unique_per_instance(self) -> None:
         """Test that each MarketTick instance gets a unique uid."""
-        tick2 = MarketTick(symbol="BTC/USD", price=50000.0, timestamp=datetime.now(), source="Kraken", schema_version=1)
+        tick2 = MarketTick(symbol="BTC/USD", price=Decimal("50000.0"), timestamp=datetime.now(), source="Kraken", schema_version=1)
         self.assertIsInstance(self.market_tick.uid, uuid.UUID)
         self.assertIsInstance(tick2.uid, uuid.UUID)
         self.assertNotEqual(self.market_tick.uid, tick2.uid)
+
+    def test_decimal_precision(self) -> None:
+        """Test the price precision."""
+        tick1 = MarketTick(symbol="BTC/USD", price=Decimal("0.1"), timestamp=datetime.now(), source="Kraken", schema_version=1)
+        tick2 = MarketTick(symbol="BTC/USD", price=Decimal("0.2"), timestamp=datetime.now(), source="Kraken", schema_version=1)
+        self.assertEqual(tick1.price * tick2.price, Decimal("0.02"))

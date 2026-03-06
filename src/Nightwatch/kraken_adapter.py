@@ -31,7 +31,7 @@ class KrakenAdapter(ExchangeMarketAdapter):
     async def connect(self) -> None:
         """Connect to the Kraken websocket."""
         try:
-            self.websocket = await connect(self.uri)
+            self.websocket = await connect(self.uri, max_size=1048576)
         except Exception as e:
             raise ConnectionError(f"Failed to connect to Kraken websocket: {e}") from e
 
@@ -61,8 +61,8 @@ class KrakenAdapter(ExchangeMarketAdapter):
         if not isinstance(entry, dict):
             return None
         try:
-            ts_str = entry.get("timestamp", "")
-            dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+            timestamp_str = entry.get("timestamp", "")
+            dt = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
             return MarketTick(
                 symbol=entry.get("symbol", ""),
                 price=Decimal(entry.get("last", 0)),
@@ -84,21 +84,32 @@ class KrakenAdapter(ExchangeMarketAdapter):
             finally:
                 self.websocket = None
 
-    async def stream_ticks(self) -> AsyncIterator[MarketTick]:
+    async def stream_ticks(self, backoff_base: int = 2, backoff_max: int = 60) -> AsyncIterator[MarketTick]:
         """Yield a continuous stream of validated pydantic MarketTick objects.
 
         Connects and subscribes automatically on first call.
         Skips control / heartbeat messages.
         Runs indefinitely until the caller breaks out or the websocket closes.
+        Implements retry with exponential backoff on websocket drop (issue #13).
         """
-        if self.websocket is None:
-            await self.connect()
-            await self.subscribe()
+        attempt = 0
 
         while True:
-            raw = await asyncio.wait_for(self.websocket.recv(), timeout=15)  # type: ignore[union-attr]
-            parsed = self.parse_message(json.loads(raw))
-            if parsed is not None:
-                if self._metrics is not None:
-                    self._metrics.ticks_received_total.inc()
-                yield parsed
+            try:
+                if self.websocket is None:
+                    await self.connect()
+                    await self.subscribe()
+
+                raw = await asyncio.wait_for(self.websocket.recv(), timeout=15)  # type: ignore[union-attr]
+                parsed = self.parse_message(json.loads(raw))
+                if parsed is not None:
+                    if self._metrics is not None:
+                        self._metrics.ticks_received_total.inc()
+                    yield parsed
+                attempt = 0  # Reset backoff after successful receive
+            except Exception as exc:
+                LOGGER.warning("WebSocket dropped or error occurred: %s. Retrying with backoff.", exc)
+                await self.close()
+                delay = min(backoff_base**attempt, backoff_max)
+                await asyncio.sleep(delay)
+                attempt += 1
