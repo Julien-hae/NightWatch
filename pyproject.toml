@@ -29,7 +29,7 @@ ruff = "^0.14.14"
 ipykernel = "^7.2.0"
 
 [tool.poetry.scripts]
-entrypoint = 'Nightwatch.main:cli'
+# entrypoint = 'Nightwatch.main:cli'
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

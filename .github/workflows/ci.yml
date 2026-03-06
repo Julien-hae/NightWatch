@@ -10,7 +10,7 @@ jobs:
       - run: pip install poetry && poetry install
       - run: poetry run ruff check .
       - run: poetry run mypy src/
-      - run: poetry run coverage run -m pytest tests/ -m "not integration" --tb=short
+      - run: poetry run coverage run -m xmlrunner discover --output-file junittest.xml
       - run: poetry run coverage xml
   integration:
     runs-on: ubuntu-latest
@@ -25,4 +25,5 @@ jobs:
           wget https://github.com/nats-io/nats-server/releases/download/v2.10.7/nats-server-v2.10.7-linux-amd64.tar.gz
           tar xzf nats-server-*.tar.gz
           sudo mv nats-server-*/nats-server /usr/local/bin/
-      - run: RUN_INTEGRATION=1 poetry run pytest tests/ -m integration --tb=short -x
+      - run: RUN_INTEGRATION=1 poetry run coverage run -m xmlrunner discover --output-file junittest.xml -s tests/Nightwatch -p "test_integration*.py"
+      - run: poetry run coverage xml

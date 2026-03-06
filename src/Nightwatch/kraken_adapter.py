@@ -110,6 +110,8 @@ class KrakenAdapter(ExchangeMarketAdapter):
             except Exception as exc:
                 LOGGER.warning("WebSocket dropped or error occurred: %s. Retrying with backoff.", exc)
                 await self.close()
+                if self._metrics is not None:
+                    self._metrics.ws_reconnects_total.inc()
                 delay = min(backoff_base**attempt, backoff_max)
                 await asyncio.sleep(delay)
                 attempt += 1

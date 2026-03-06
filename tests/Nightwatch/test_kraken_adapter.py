@@ -4,8 +4,11 @@ import asyncio
 import json
 import unittest
 from datetime import datetime
+from decimal import Decimal
 from typing import Any, Dict, List
 from unittest.mock import AsyncMock, patch
+
+from prometheus_client import CollectorRegistry
 
 from Nightwatch.kraken_adapter import KrakenAdapter
 from Nightwatch.metrics import NightwatchMetrics
@@ -31,7 +34,7 @@ class TestKrakenAdapter(unittest.TestCase):
                     "bid_qty": 740.0,
                     "ask": 0.10036,
                     "ask_qty": 1361.44813783,
-                    "last": 0.10035,
+                    "last": "0.10035",
                     "volume": 997038.98383185,
                     "vwap": 0.10148,
                     "low": 0.09979,
@@ -47,7 +50,7 @@ class TestKrakenAdapter(unittest.TestCase):
             self.fail("parse_message returned None for a valid message")
         self.assertIsInstance(market_tick, MarketTick)
         self.assertEqual(market_tick.symbol, "BTC/USD")
-        self.assertEqual(market_tick.price, 0.10035)
+        self.assertEqual(market_tick.price, Decimal("0.10035"))
         data_list = message["data"]
         dt = datetime.fromisoformat(data_list[0]["timestamp"].replace("Z", "+00:00"))
         self.assertEqual(market_tick.timestamp, dt)
@@ -152,17 +155,19 @@ class TestKrakenAdapter(unittest.TestCase):
 
     def test_parse_error_increments_metric(self) -> None:
         """Given a malformed message, when parsed, then parse_errors_total increments."""
-        metrics = NightwatchMetrics()
+        registry = CollectorRegistry()
+        metrics = NightwatchMetrics(registry=registry)
         adapter = KrakenAdapter(metrics=metrics)
 
-        before = metrics.parse_errors_total._value.get()
         adapter.parse_message({"channel": "ticker", "data": [{"key": "value"}]})
-        after = metrics.parse_errors_total._value.get()
-        self.assertEqual(after - before, 1.0)
+        metric_families = list(metrics.parse_errors_total.collect())
+        value = metric_families[0].samples[0].value
+        self.assertEqual(value, 1.0)
 
     def test_valid_parse_does_not_increment_error_metric(self) -> None:
         """Given a valid message, when parsed, then parse_errors_total stays at 0."""
-        metrics = NightwatchMetrics()
+        registry = CollectorRegistry()
+        metrics = NightwatchMetrics(registry=registry)
         adapter = KrakenAdapter(metrics=metrics)
 
         valid_message = {
@@ -176,7 +181,9 @@ class TestKrakenAdapter(unittest.TestCase):
             ],
         }
         adapter.parse_message(valid_message)
-        self.assertEqual(metrics.parse_errors_total._value.get(), 0.0)
+        metric_families = list(metrics.parse_errors_total.collect())
+        value = metric_families[0].samples[0].value
+        self.assertEqual(value, 0.0)
 
     def test_no_metrics_does_not_crash(self) -> None:
         """Given no metrics injected, when a bad message arrives, then no AttributeError."""

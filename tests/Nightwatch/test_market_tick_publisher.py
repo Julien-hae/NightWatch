@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 import unittest
 from collections.abc import Coroutine
 from datetime import datetime, timezone
@@ -15,6 +16,7 @@ from Nightwatch.publisher import MarketTickPublisher
 from tests.fixtures.nats_server import NatsServerFixture
 
 
+@unittest.skipUnless(os.environ.get("RUN_INTEGRATION"), "Integration tests require RUN_INTEGRATION=1")
 class TestMarketTickPublisherIntegration(unittest.TestCase):
     """Integration tests that start / stop a real NATS server."""
 
@@ -59,7 +61,7 @@ class TestMarketTickPublisherIntegration(unittest.TestCase):
             await pub.connect()
 
             tick = MarketTick(
-                timestamp=datetime.now(timezone.utc), symbol="BTC/USD", price=Decimal(42000.0), source="Kraken", schema_version=1
+                timestamp=datetime.now(timezone.utc), symbol="BTC/USD", price=Decimal("42000.0"), source="Kraken", schema_version=1
             )
             subject = await pub.publish(tick)
 
@@ -81,7 +83,7 @@ class TestMarketTickPublisherIntegration(unittest.TestCase):
             pub = MarketTickPublisher(servers=(self.nats.url,))
             await pub.connect()
             tick = MarketTick(
-                timestamp=datetime.now(timezone.utc), symbol="BTC/USD", price=Decimal(42000.0), source="Kraken", schema_version=1
+                timestamp=datetime.now(timezone.utc), symbol="BTC/USD", price=Decimal("42000.0"), source="Kraken", schema_version=1
             )
             await pub.publish(tick)
 
@@ -138,7 +140,7 @@ class TestMarketTickPublisherIntegration(unittest.TestCase):
             await asyncio.wait_for(reconnected.wait(), timeout=10)
             self.assertTrue(pub.client.is_connected)
             tick = MarketTick(
-                timestamp=datetime.now(timezone.utc), symbol="BTC/USD", price=Decimal(99000.0), source="Kraken", schema_version=1
+                timestamp=datetime.now(timezone.utc), symbol="BTC/USD", price=Decimal("99000.0"), source="Kraken", schema_version=1
             )
             subject = await pub.publish(tick)
             self.assertEqual(subject, "market.tick.BTCUSD")

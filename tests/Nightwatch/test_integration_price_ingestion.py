@@ -5,6 +5,7 @@ Flow under test: Kraken WS → Parse → MarketTick (pydantic) → NATS publish 
 
 import asyncio
 import json
+import os
 import time
 import unittest
 from collections.abc import Coroutine
@@ -19,6 +20,7 @@ from Nightwatch.publisher import MarketTickPublisher
 from tests.fixtures.nats_server import NatsServerFixture
 
 
+@unittest.skipUnless(os.environ.get("RUN_INTEGRATION"), "Integration tests require RUN_INTEGRATION=1")
 class TestPriceIngestionIntegration(unittest.TestCase):
     """Integration tests for the full Kraken → NATS pipeline.
 
