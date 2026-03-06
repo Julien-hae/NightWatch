@@ -2,27 +2,31 @@
 
 import asyncio
 import json
+import logging
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, AsyncIterator, Dict, Optional
 
-import pytz  # type: ignore[import-untyped]
 from websockets import connect
 from websockets.asyncio.client import ClientConnection
 
 from Nightwatch.exchange_market_adapter import ExchangeMarketAdapter
+from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
+
+LOGGER = logging.getLogger(__name__)
 
 
 class KrakenAdapter(ExchangeMarketAdapter):
     """Adapter to ingest live stock data from the Kraken API."""
 
-    def __init__(self, symbol: str = "BTC/USD") -> None:
+    def __init__(self, symbol: str = "BTC/USD", metrics: Optional[NightwatchMetrics] = None) -> None:
         """Initialize the KrakenAdapter class."""
         super().__init__()
         self.websocket: Optional[ClientConnection] = None
         self.uri = "wss://ws.kraken.com/v2"
         self.symbol = symbol
+        self._metrics = metrics
 
     async def _connect_async(self) -> None:
         """Asynchronously connect to the Kraken websocket."""
@@ -54,17 +58,30 @@ class KrakenAdapter(ExchangeMarketAdapter):
 
     def parse_message(self, message: Optional[Dict[str, Any]]) -> Optional[MarketTick]:
         """Parse a message received from the websocket and return a MarketTick, or None for non-ticker messages."""
-        if isinstance(message, dict) and message.get("data", None) is not None:
-            if message.get("channel", "") == "ticker":
-                naive_dt = datetime.fromisoformat(message["data"][0]["timestamp"].replace("Z", "+00:00"))
-                aware_utc_dt = naive_dt.replace(tzinfo=pytz.utc)
-                return MarketTick(
-                    symbol=message["data"][0].get("symbol", ""),
-                    price=Decimal(message["data"][0].get("last", 0)),
-                    timestamp=aware_utc_dt,
-                    source="Kraken",
-                    schema_version=1,
-                )
+        if not isinstance(message, dict):
+            return None
+        if message.get("channel") != "ticker":
+            return None
+        data = message.get("data")
+        if not data or not isinstance(data, list) or len(data) == 0:
+            return None
+        entry = data[0]
+        if not isinstance(entry, dict):
+            return None
+        try:
+            ts_str = entry.get("timestamp", "")
+            dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+            return MarketTick(
+                symbol=entry.get("symbol", ""),
+                price=Decimal(entry.get("last", 0)),
+                timestamp=dt,
+                source="Kraken",
+                schema_version=1,
+            )
+        except (KeyError, ValueError, TypeError) as exc:
+            if self._metrics is not None:
+                self._metrics.parse_errors_total.inc()
+            LOGGER.error("Error parsing message: %s. Exception: %s", message, exc)
         return None
 
     async def _close_async(self) -> None:
@@ -92,11 +109,17 @@ class KrakenAdapter(ExchangeMarketAdapter):
             await self._subscribe_async()
 
         while True:
-            assert self.websocket is not None
-            raw = await asyncio.wait_for(self.websocket.recv(), timeout=15)
+            if self.websocket is None:
+                self.connect()
+                LOGGER.warning("Websocket was unexpectedly closed. Reconnected.")
+            raw = await asyncio.wait_for(self.websocket.recv(), timeout=15)  # type: ignore[union-attr]
             parsed = self.parse_message(json.loads(raw))
             if parsed is not None:
-                assert parsed.timestamp is not None
+                if self._metrics is not None:
+                    self._metrics.ticks_received_total.inc()
+                if parsed.timestamp is None:
+                    LOGGER.warning("Received tick with missing timestamp: %s. Filling with epoch", parsed)
+                    parsed.timestamp = datetime(1970, 1, 1)
                 yield MarketTick(
                     timestamp=parsed.timestamp,
                     symbol=parsed.symbol,

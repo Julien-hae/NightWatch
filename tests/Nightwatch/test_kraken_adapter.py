@@ -7,9 +7,8 @@ from datetime import datetime
 from typing import Any, Dict, List
 from unittest.mock import AsyncMock, patch
 
-import pytz  # type: ignore[import-untyped]
-
 from Nightwatch.kraken_adapter import KrakenAdapter
+from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
 
 
@@ -50,9 +49,8 @@ class TestKrakenAdapter(unittest.TestCase):
         self.assertEqual(market_tick.symbol, "BTC/USD")
         self.assertEqual(market_tick.price, 0.10035)
         data_list = message["data"]
-        naive_dt = datetime.fromisoformat(data_list[0]["timestamp"].replace("Z", "+00:00"))
-        aware_utc_dt = naive_dt.replace(tzinfo=pytz.utc)
-        self.assertEqual(market_tick.timestamp, aware_utc_dt)
+        dt = datetime.fromisoformat(data_list[0]["timestamp"].replace("Z", "+00:00"))
+        self.assertEqual(market_tick.timestamp, dt)
 
     def test_parse_heartbeat_message(self) -> None:
         """Test the parse_message method of the KrakenAdapter class with a heartbeat message."""
@@ -153,3 +151,43 @@ class TestKrakenAdapter(unittest.TestCase):
         market_tick = asyncio.run(asyncio.wait_for(run_integration(), timeout=15))
         self.assertIsNotNone(market_tick, "Did not receive a valid MarketTick within 10 seconds")
         self.assertEqual(market_tick.symbol, "BTC/USD")
+
+    def test_parse_error_increments_metric(self) -> None:
+        """Given a malformed message, when parsed, then parse_errors_total increments."""
+        metrics = NightwatchMetrics()
+        adapter = KrakenAdapter(metrics=metrics)
+
+        before = metrics.parse_errors_total._value.get()
+        adapter.parse_message({"channel": "ticker", "data": [{"key": "value"}]})
+        after = metrics.parse_errors_total._value.get()
+        self.assertEqual(after - before, 1.0)
+
+    def test_valid_parse_does_not_increment_error_metric(self) -> None:
+        """Given a valid message, when parsed, then parse_errors_total stays at 0."""
+        metrics = NightwatchMetrics()
+        adapter = KrakenAdapter(metrics=metrics)
+
+        valid_message = {
+            "channel": "ticker",
+            "data": [
+                {
+                    "symbol": "BTC/USD",
+                    "last": "65000.0",
+                    "timestamp": "2023-09-25T09:04:31.742648Z",
+                }
+            ],
+        }
+        adapter.parse_message(valid_message)
+        self.assertEqual(metrics.parse_errors_total._value.get(), 0.0)
+
+    def test_no_metrics_does_not_crash(self) -> None:
+        """Given no metrics injected, when a bad message arrives, then no AttributeError."""
+        adapter = KrakenAdapter()  # metrics=None
+        result = adapter.parse_message({"channel": "ticker", "data": []})
+        self.assertIsNone(result)
+
+    def test_no_metrics_does_not_crash_with_invalid_data(self) -> None:
+        """Given no metrics injected, when a bad message arrives, then no AttributeError."""
+        adapter = KrakenAdapter()  # metrics=None
+        result = adapter.parse_message({"channel": "ticker", "data": ["invalid"]})
+        self.assertIsNone(result)

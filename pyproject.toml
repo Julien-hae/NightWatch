@@ -12,7 +12,6 @@ readme = "README.md"
 python = "~3.11"
 numpy = "~1.26"                                     # NumPy is the fundamental package for array computing with Python.
 alpaca-py = "^0.43.2"
-pytz = "^2025.2"
 python-dotenv = "^1.2.1"
 websockets = "^16.0"
 nats-py = "^2.13.1"
