@@ -40,15 +40,15 @@ class TestPriceIngestionIntegration(unittest.TestCase):
         cls.loop = asyncio.new_event_loop()
 
         cls.adapter = KrakenAdapter()
-        cls.loop.run_until_complete(cls.adapter._connect_async())
-        cls.loop.run_until_complete(cls.adapter._subscribe_async())
+        cls.loop.run_until_complete(cls.adapter.connect())
+        cls.loop.run_until_complete(cls.adapter.subscribe())
 
         cls.publisher = MarketTickPublisher(servers=(cls.nats.url,))
         cls.loop.run_until_complete(cls.publisher.connect())
 
     @classmethod
     def tearDownClass(cls) -> None:
-        cls.loop.run_until_complete(cls.adapter._close_async())
+        cls.loop.run_until_complete(cls.adapter.close())
         cls.loop.run_until_complete(cls.publisher.close())
         cls.loop.close()
         cls.nats.stop()

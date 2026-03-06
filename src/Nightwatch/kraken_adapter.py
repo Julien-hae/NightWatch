@@ -28,20 +28,16 @@ class KrakenAdapter(ExchangeMarketAdapter):
         self.symbol = symbol
         self._metrics = metrics
 
-    async def _connect_async(self) -> None:
-        """Asynchronously connect to the Kraken websocket."""
+    async def connect(self) -> None:
+        """Connect to the Kraken websocket."""
         try:
             self.websocket = await connect(self.uri)
         except Exception as e:
             raise ConnectionError(f"Failed to connect to Kraken websocket: {e}") from e
 
-    def connect(self) -> None:
-        """Connect to a Kraken websocket to receive live stock data."""
-        asyncio.run(self._connect_async())
-
-    async def _subscribe_async(self) -> None:
-        """Asynchronously subscribe to the self.symbol ticker."""
-        if not self.websocket:
+    async def subscribe(self) -> None:
+        """Subscribe to the self.symbol ticker."""
+        if self.websocket is None:
             raise ConnectionError("WebSocket not connected. Call connect() first.")
         subscribe_message = {
             "method": "subscribe",
@@ -51,10 +47,6 @@ class KrakenAdapter(ExchangeMarketAdapter):
             },
         }
         await self.websocket.send(json.dumps(subscribe_message))
-
-    def subscribe(self) -> None:
-        """Subscribe to a symbol to receive live stock data."""
-        asyncio.run(self._subscribe_async())
 
     def parse_message(self, message: Optional[Dict[str, Any]]) -> Optional[MarketTick]:
         """Parse a message received from the websocket and return a MarketTick, or None for non-ticker messages."""
@@ -84,18 +76,13 @@ class KrakenAdapter(ExchangeMarketAdapter):
             LOGGER.error("Error parsing message: %s. Exception: %s", message, exc)
         return None
 
-    async def _close_async(self) -> None:
-        """Asynchronously close the Kraken websocket connection, if open."""
+    async def close(self) -> None:
+        """Close the Kraken websocket connection, if open."""
         if self.websocket is not None:
             try:
                 await self.websocket.close()
             finally:
                 self.websocket = None
-
-    def close(self) -> None:
-        """Close the Kraken websocket connection."""
-        if self.websocket is not None:
-            asyncio.run(self._close_async())
 
     async def stream_ticks(self) -> AsyncIterator[MarketTick]:
         """Yield a continuous stream of validated pydantic MarketTick objects.
@@ -105,8 +92,8 @@ class KrakenAdapter(ExchangeMarketAdapter):
         Runs indefinitely until the caller breaks out or the websocket closes.
         """
         if self.websocket is None:
-            await self._connect_async()
-            await self._subscribe_async()
+            await self.connect()
+            await self.subscribe()
 
         while True:
             raw = await asyncio.wait_for(self.websocket.recv(), timeout=15)  # type: ignore[union-attr]

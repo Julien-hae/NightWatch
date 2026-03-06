@@ -13,15 +13,15 @@ class ExchangeMarketAdapter(ABC):
         """Initialize the ExchangeMarketAdapter class."""
 
     @abstractmethod
-    def connect(self) -> None:
+    async def connect(self) -> None:
         """Connect to a websocket to receive live stock data."""
 
     @abstractmethod
-    def subscribe(self) -> None:
+    async def subscribe(self) -> None:
         """Subscribe to a symbol to receive live stock data."""
 
     @abstractmethod
-    def close(self) -> None:
+    async def close(self) -> None:
         """Close the websocket connection."""
 
     @abstractmethod

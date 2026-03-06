@@ -74,24 +74,22 @@ class TestKrakenAdapter(unittest.TestCase):
         """Test the connect method of the KrakenAdapter class."""
         mock_ws = AsyncMock()
         mock_connect.return_value = mock_ws
-        self.adapter.connect()
+        asyncio.run(self.adapter.connect())
         mock_connect.assert_called_once_with(self.adapter.uri)
         self.assertEqual(self.adapter.websocket, mock_ws)
 
-    @patch("Nightwatch.kraken_adapter.connect", new_callable=AsyncMock)
-    def test_subscribe(self, mock_connect: AsyncMock) -> None:
+    def test_subscribe(self) -> None:
         """Test the subscribe method of the KrakenAdapter class."""
         mock_ws = AsyncMock()
-        mock_connect.return_value = mock_ws
-        self.adapter.connect()
-        self.adapter.subscribe()
-        self.assertTrue(mock_ws.send.called)
+        self.adapter.websocket = mock_ws
+        asyncio.run(self.adapter.subscribe())
+        mock_ws.send.assert_called_once()
 
     def test_close(self) -> None:
         """Test the close method of the KrakenAdapter class."""
         mock_ws = AsyncMock()
         self.adapter.websocket = mock_ws
-        self.adapter.close()
+        asyncio.run(self.adapter.close())
         mock_ws.close.assert_called_once()
 
     def test_integration_receive_at_least_one_message(self) -> None:
@@ -101,8 +99,8 @@ class TestKrakenAdapter(unittest.TestCase):
         """
 
         async def run_integration() -> List[str]:
-            await self.adapter._connect_async()
-            await self.adapter._subscribe_async()
+            await self.adapter.connect()
+            await self.adapter.subscribe()
             if self.adapter.websocket is None:
                 raise ConnectionError("WebSocket not connected. Call connect() first.")
 
@@ -114,7 +112,7 @@ class TestKrakenAdapter(unittest.TestCase):
                         break
             finally:
                 if self.adapter.websocket:
-                    await self.adapter._close_async()
+                    await self.adapter.close()
             return messages
 
         messages = asyncio.run(asyncio.wait_for(run_integration(), timeout=10))
@@ -127,8 +125,8 @@ class TestKrakenAdapter(unittest.TestCase):
         """
 
         async def run_integration() -> Any:
-            await self.adapter._connect_async()
-            await self.adapter._subscribe_async()
+            await self.adapter.connect()
+            await self.adapter.subscribe()
 
             if not self.adapter.websocket:
                 raise ConnectionError("WebSocket not connected. Call connect() first.")
@@ -145,7 +143,7 @@ class TestKrakenAdapter(unittest.TestCase):
                                 break
             finally:
                 if self.adapter.websocket:
-                    await self.adapter._close_async()
+                    await self.adapter.close()
             return market_tick
 
         market_tick = asyncio.run(asyncio.wait_for(run_integration(), timeout=15))
