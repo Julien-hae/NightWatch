@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import os
 import unittest
 from datetime import datetime
 from decimal import Decimal
@@ -95,6 +96,7 @@ class TestKrakenAdapter(unittest.TestCase):
         asyncio.run(self.adapter.close())
         mock_ws.close.assert_called_once()
 
+    @unittest.skipUnless(os.environ.get("RUN_INTEGRATION"), "Integration tests require RUN_INTEGRATION=1")
     def test_integration_receive_at_least_one_message(self) -> None:
         """
         Integration test: Connect to Kraken, subscribe to BTC/USD, and receive at least 1 message within 10 seconds.
@@ -121,6 +123,7 @@ class TestKrakenAdapter(unittest.TestCase):
         messages = asyncio.run(asyncio.wait_for(run_integration(), timeout=10))
         self.assertGreaterEqual(len(messages), 1, "Did not receive at least 1 message within 10 seconds")
 
+    @unittest.skipUnless(os.environ.get("RUN_INTEGRATION"), "Integration tests require RUN_INTEGRATION=1")
     def test_integration_parse_real_message(self) -> None:
         """
         Integration test: Connect to Kraken, subscribe to BTC/USD, receive a message, and parse it.
