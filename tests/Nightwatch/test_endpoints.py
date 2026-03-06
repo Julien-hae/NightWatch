@@ -39,10 +39,33 @@ class TestHealthEndpoint(unittest.TestCase):
             {"ws_connected": True, "nats_connected": True},
         )
 
+    def test_healthz_partial_connected_state_to_websockets(self) -> None:
+        """When the health state is partially connected, /healthz should reflect that."""
+        self.health.ws_connected = True
+        self.health.nats_connected = False
+        response = self.client.get("/healthz")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {"ws_connected": True, "nats_connected": False},
+        )
+
+    def test_healthz_partial_connected_state_to_nats(self) -> None:
+        """When the health state is partially connected, /healthz should reflect that."""
+        self.health.ws_connected = False
+        self.health.nats_connected = True
+        response = self.client.get("/healthz")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {"ws_connected": False, "nats_connected": True},
+        )
+
     def tearDown(self) -> None:
         """Reset any global state if necessary after each test."""
         self.client.close()
-        self.metrics = None
 
 
 class TestMetricsEndpoint(unittest.TestCase):

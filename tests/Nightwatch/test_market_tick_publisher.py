@@ -2,17 +2,21 @@
 
 import asyncio
 import json
+import os
 import unittest
 from collections.abc import Coroutine
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any
 
 from nats.aio.client import Client as NatsClient
 
 from Nightwatch.models.market_tick import MarketTick
-from Nightwatch.publisher import MarketTickPublisher, NatsServerFixture
+from Nightwatch.publisher import MarketTickPublisher
+from tests.fixtures.nats_server import NatsServerFixture
 
 
+@unittest.skipUnless(os.environ.get("RUN_INTEGRATION"), "Integration tests require RUN_INTEGRATION=1")
 class TestMarketTickPublisherIntegration(unittest.TestCase):
     """Integration tests that start / stop a real NATS server."""
 
@@ -56,7 +60,9 @@ class TestMarketTickPublisherIntegration(unittest.TestCase):
             pub = MarketTickPublisher(servers=(self.nats.url,))
             await pub.connect()
 
-            tick = MarketTick(timestamp=datetime.now(timezone.utc), symbol="BTC/USD", price=42000.0, source="Kraken", schema_version=1)
+            tick = MarketTick(
+                timestamp=datetime.now(timezone.utc), symbol="BTC/USD", price=Decimal("42000.0"), source="Kraken", schema_version=1
+            )
             subject = await pub.publish(tick)
 
             self.assertEqual(subject, "market.tick.BTCUSD")
@@ -76,7 +82,9 @@ class TestMarketTickPublisherIntegration(unittest.TestCase):
 
             pub = MarketTickPublisher(servers=(self.nats.url,))
             await pub.connect()
-            tick = MarketTick(timestamp=datetime.now(timezone.utc), symbol="BTC/USD", price=42000.0, source="Kraken", schema_version=1)
+            tick = MarketTick(
+                timestamp=datetime.now(timezone.utc), symbol="BTC/USD", price=Decimal("42000.0"), source="Kraken", schema_version=1
+            )
             await pub.publish(tick)
 
             try:
@@ -88,13 +96,13 @@ class TestMarketTickPublisherIntegration(unittest.TestCase):
             self.assertEqual(len(received), 1, "Expected exactly one message")
             payload = json.loads(received[0])
             self.assertEqual(payload["symbol"], tick.symbol)
-            self.assertEqual(float(payload["price"]), float(tick.price))
+            self.assertEqual(Decimal(payload["price"]), Decimal(tick.price))
             self.assertEqual(payload["source"], tick.source)
             self.assertEqual(payload["schema_version"], tick.schema_version)
 
             reconstructed = MarketTick(**payload)
             self.assertEqual(reconstructed.symbol, tick.symbol)
-            self.assertEqual(float(reconstructed.price), float(tick.price))
+            self.assertEqual(Decimal(reconstructed.price), Decimal(tick.price))
             self.assertEqual(reconstructed.uid, tick.uid)
 
             await pub.close()
@@ -131,7 +139,9 @@ class TestMarketTickPublisherIntegration(unittest.TestCase):
             self.nats.start()
             await asyncio.wait_for(reconnected.wait(), timeout=10)
             self.assertTrue(pub.client.is_connected)
-            tick = MarketTick(timestamp=datetime.now(timezone.utc), symbol="BTC/USD", price=99000.0, source="Kraken", schema_version=1)
+            tick = MarketTick(
+                timestamp=datetime.now(timezone.utc), symbol="BTC/USD", price=Decimal("99000.0"), source="Kraken", schema_version=1
+            )
             subject = await pub.publish(tick)
             self.assertEqual(subject, "market.tick.BTCUSD")
 

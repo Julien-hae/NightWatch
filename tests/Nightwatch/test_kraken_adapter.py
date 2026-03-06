@@ -4,12 +4,14 @@ import asyncio
 import json
 import unittest
 from datetime import datetime
+from decimal import Decimal
 from typing import Any, Dict, List
 from unittest.mock import AsyncMock, patch
 
-import pytz  # type: ignore[import-untyped]
+from prometheus_client import CollectorRegistry
 
 from Nightwatch.kraken_adapter import KrakenAdapter
+from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
 
 
@@ -32,7 +34,7 @@ class TestKrakenAdapter(unittest.TestCase):
                     "bid_qty": 740.0,
                     "ask": 0.10036,
                     "ask_qty": 1361.44813783,
-                    "last": 0.10035,
+                    "last": "0.10035",
                     "volume": 997038.98383185,
                     "vwap": 0.10148,
                     "low": 0.09979,
@@ -48,11 +50,10 @@ class TestKrakenAdapter(unittest.TestCase):
             self.fail("parse_message returned None for a valid message")
         self.assertIsInstance(market_tick, MarketTick)
         self.assertEqual(market_tick.symbol, "BTC/USD")
-        self.assertEqual(market_tick.price, 0.10035)
+        self.assertEqual(market_tick.price, Decimal("0.10035"))
         data_list = message["data"]
-        naive_dt = datetime.fromisoformat(data_list[0]["timestamp"].replace("Z", "+00:00"))
-        aware_utc_dt = naive_dt.replace(tzinfo=pytz.utc)
-        self.assertEqual(market_tick.timestamp, aware_utc_dt)
+        dt = datetime.fromisoformat(data_list[0]["timestamp"].replace("Z", "+00:00"))
+        self.assertEqual(market_tick.timestamp, dt)
 
     def test_parse_heartbeat_message(self) -> None:
         """Test the parse_message method of the KrakenAdapter class with a heartbeat message."""
@@ -76,24 +77,22 @@ class TestKrakenAdapter(unittest.TestCase):
         """Test the connect method of the KrakenAdapter class."""
         mock_ws = AsyncMock()
         mock_connect.return_value = mock_ws
-        self.adapter.connect()
-        mock_connect.assert_called_once_with(self.adapter.uri)
+        asyncio.run(self.adapter.connect())
+        mock_connect.assert_called_once_with(self.adapter.uri, max_size=1048576)
         self.assertEqual(self.adapter.websocket, mock_ws)
 
-    @patch("Nightwatch.kraken_adapter.connect", new_callable=AsyncMock)
-    def test_subscribe(self, mock_connect: AsyncMock) -> None:
+    def test_subscribe(self) -> None:
         """Test the subscribe method of the KrakenAdapter class."""
         mock_ws = AsyncMock()
-        mock_connect.return_value = mock_ws
-        self.adapter.connect()
-        self.adapter.subscribe()
-        self.assertTrue(mock_ws.send.called)
+        self.adapter.websocket = mock_ws
+        asyncio.run(self.adapter.subscribe())
+        mock_ws.send.assert_called_once()
 
     def test_close(self) -> None:
         """Test the close method of the KrakenAdapter class."""
         mock_ws = AsyncMock()
         self.adapter.websocket = mock_ws
-        self.adapter.close()
+        asyncio.run(self.adapter.close())
         mock_ws.close.assert_called_once()
 
     def test_integration_receive_at_least_one_message(self) -> None:
@@ -103,8 +102,8 @@ class TestKrakenAdapter(unittest.TestCase):
         """
 
         async def run_integration() -> List[str]:
-            await self.adapter._connect_async()
-            await self.adapter._subscribe_async()
+            await self.adapter.connect()
+            await self.adapter.subscribe()
             if self.adapter.websocket is None:
                 raise ConnectionError("WebSocket not connected. Call connect() first.")
 
@@ -116,7 +115,7 @@ class TestKrakenAdapter(unittest.TestCase):
                         break
             finally:
                 if self.adapter.websocket:
-                    await self.adapter._close_async()
+                    await self.adapter.close()
             return messages
 
         messages = asyncio.run(asyncio.wait_for(run_integration(), timeout=10))
@@ -129,8 +128,8 @@ class TestKrakenAdapter(unittest.TestCase):
         """
 
         async def run_integration() -> Any:
-            await self.adapter._connect_async()
-            await self.adapter._subscribe_async()
+            await self.adapter.connect()
+            await self.adapter.subscribe()
 
             if not self.adapter.websocket:
                 raise ConnectionError("WebSocket not connected. Call connect() first.")
@@ -147,9 +146,53 @@ class TestKrakenAdapter(unittest.TestCase):
                                 break
             finally:
                 if self.adapter.websocket:
-                    await self.adapter._close_async()
+                    await self.adapter.close()
             return market_tick
 
         market_tick = asyncio.run(asyncio.wait_for(run_integration(), timeout=15))
         self.assertIsNotNone(market_tick, "Did not receive a valid MarketTick within 10 seconds")
         self.assertEqual(market_tick.symbol, "BTC/USD")
+
+    def test_parse_error_increments_metric(self) -> None:
+        """Given a malformed message, when parsed, then parse_errors_total increments."""
+        registry = CollectorRegistry()
+        metrics = NightwatchMetrics(registry=registry)
+        adapter = KrakenAdapter(metrics=metrics)
+
+        adapter.parse_message({"channel": "ticker", "data": [{"key": "value"}]})
+        metric_families = list(metrics.parse_errors_total.collect())
+        value = metric_families[0].samples[0].value
+        self.assertEqual(value, 1.0)
+
+    def test_valid_parse_does_not_increment_error_metric(self) -> None:
+        """Given a valid message, when parsed, then parse_errors_total stays at 0."""
+        registry = CollectorRegistry()
+        metrics = NightwatchMetrics(registry=registry)
+        adapter = KrakenAdapter(metrics=metrics)
+
+        valid_message = {
+            "channel": "ticker",
+            "data": [
+                {
+                    "symbol": "BTC/USD",
+                    "last": "65000.0",
+                    "timestamp": "2023-09-25T09:04:31.742648Z",
+                }
+            ],
+        }
+        adapter.parse_message(valid_message)
+        metric_families = list(metrics.parse_errors_total.collect())
+        value = metric_families[0].samples[0].value
+        self.assertEqual(value, 0.0)
+
+    def test_no_metrics_does_not_crash(self) -> None:
+        """Given no metrics injected, when a bad message arrives, then no AttributeError."""
+        adapter = KrakenAdapter()  # metrics=None
+        result = adapter.parse_message({"channel": "ticker", "data": []})
+        self.assertIsNone(result)
+
+    def test_no_metrics_does_not_crash_with_invalid_data(self) -> None:
+        """Given no metrics injected, when a bad message arrives, then no AttributeError."""
+        adapter = KrakenAdapter()  # metrics=None
+        result = adapter.parse_message({"channel": "ticker", "data": ["invalid"]})
+        self.assertIsNone(result)

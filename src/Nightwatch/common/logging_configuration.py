@@ -43,7 +43,7 @@ def configure_logger() -> None:
     loglevel_name = os.environ.get("LOG_LEVEL", default="INFO")
     loglevel = logging.getLevelName(loglevel_name)
     if isinstance(loglevel, str):
-        LOGGER.warning(  # pylint: disable=logging-too-many-args
+        LOGGER.warning(
             "Loglevel-Name '%s' not found in loglevels. Falling back to INFO.",
             loglevel_name,
         )

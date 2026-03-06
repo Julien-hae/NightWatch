@@ -5,18 +5,22 @@ Flow under test: Kraken WS → Parse → MarketTick (pydantic) → NATS publish 
 
 import asyncio
 import json
+import os
 import time
 import unittest
 from collections.abc import Coroutine
+from decimal import Decimal
 from typing import Any
 
 from nats.aio.client import Client as NatsClient
 
 from Nightwatch.kraken_adapter import KrakenAdapter
 from Nightwatch.models.market_tick import MarketTick
-from Nightwatch.publisher import MarketTickPublisher, NatsServerFixture
+from Nightwatch.publisher import MarketTickPublisher
+from tests.fixtures.nats_server import NatsServerFixture
 
 
+@unittest.skipUnless(os.environ.get("RUN_INTEGRATION"), "Integration tests require RUN_INTEGRATION=1")
 class TestPriceIngestionIntegration(unittest.TestCase):
     """Integration tests for the full Kraken → NATS pipeline.
 
@@ -38,15 +42,15 @@ class TestPriceIngestionIntegration(unittest.TestCase):
         cls.loop = asyncio.new_event_loop()
 
         cls.adapter = KrakenAdapter()
-        cls.loop.run_until_complete(cls.adapter._connect_async())
-        cls.loop.run_until_complete(cls.adapter._subscribe_async())
+        cls.loop.run_until_complete(cls.adapter.connect())
+        cls.loop.run_until_complete(cls.adapter.subscribe())
 
         cls.publisher = MarketTickPublisher(servers=(cls.nats.url,))
         cls.loop.run_until_complete(cls.publisher.connect())
 
     @classmethod
     def tearDownClass(cls) -> None:
-        cls.loop.run_until_complete(cls.adapter._close_async())
+        cls.loop.run_until_complete(cls.adapter.close())
         cls.loop.run_until_complete(cls.publisher.close())
         cls.loop.close()
         cls.nats.stop()
@@ -64,7 +68,7 @@ class TestPriceIngestionIntegration(unittest.TestCase):
             self.assertIsInstance(tick, MarketTick)
             subject = await self.publisher.publish(tick)
             self.assertEqual(subject, "market.tick.BTCUSD")
-            self.assertGreater(float(tick.price), 0)
+            self.assertGreater(Decimal(tick.price), 0)
 
         self._run(_test())
 
@@ -83,14 +87,14 @@ class TestPriceIngestionIntegration(unittest.TestCase):
             payload = json.loads(msg.data)
 
             self.assertEqual(payload["symbol"], tick.symbol)
-            self.assertEqual(float(payload["price"]), float(tick.price))
+            self.assertEqual(Decimal(payload["price"]), Decimal(tick.price))
             self.assertEqual(payload["source"], "Kraken")
             self.assertEqual(payload["schema_version"], 1)
 
             # Round-trip: reconstruct a MarketTick from the payload
             reconstructed = MarketTick(**payload)
             self.assertEqual(reconstructed.uid, tick.uid)
-            self.assertEqual(float(reconstructed.price), float(tick.price))
+            self.assertEqual(Decimal(reconstructed.price), Decimal(tick.price))
 
             await sub_client.drain()
 

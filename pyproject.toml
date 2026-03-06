@@ -10,15 +10,13 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "~3.11"
-numpy = "~1.26"                                     # NumPy is the fundamental package for array computing with Python.
-alpaca-py = "^0.43.2"
-pytz = "^2025.2"
 python-dotenv = "^1.2.1"
 websockets = "^16.0"
 nats-py = "^2.13.1"
 fastapi = "^0.135.1"
 prometheus-client = "^0.24.1"
 httpx = "^0.28.1"
+numpy = "^2.4.2"
 
 [tool.poetry.group.dev.dependencies]
 coverage = {extras = ["toml"], version = "~7.4"}    # Code coverage measurement for Python
@@ -31,7 +29,7 @@ ruff = "^0.14.14"
 ipykernel = "^7.2.0"
 
 [tool.poetry.scripts]
-entrypoint = 'Nightwatch.main:cli'
+# entrypoint = 'Nightwatch.main:cli'
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
