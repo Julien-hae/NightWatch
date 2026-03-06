@@ -59,3 +59,11 @@ class TestMarketTick(unittest.TestCase):
         tick1 = MarketTick(symbol="BTC/USD", price=Decimal("0.1"), timestamp=datetime.now(), source="Kraken", schema_version=1)
         tick2 = MarketTick(symbol="BTC/USD", price=Decimal("0.2"), timestamp=datetime.now(), source="Kraken", schema_version=1)
         self.assertEqual(tick1.price * tick2.price, Decimal("0.02"))
+
+    def test_empty_symbol_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            MarketTick(symbol="", price=Decimal("100"), timestamp=datetime.now(), source="Kraken", schema_version=1)
+
+    def test_blank_symbol_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            MarketTick(symbol="   ", price=Decimal("100"), timestamp=datetime.now(), source="Kraken", schema_version=1)

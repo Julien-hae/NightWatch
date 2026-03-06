@@ -65,7 +65,7 @@ class KrakenAdapter(ExchangeMarketAdapter):
             dt = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
             return MarketTick(
                 symbol=entry.get("symbol", ""),
-                price=Decimal(entry.get("last", 0)),
+                price=Decimal(str(entry.get("last", "0"))),
                 timestamp=dt,
                 source="Kraken",
                 schema_version=1,
@@ -73,7 +73,12 @@ class KrakenAdapter(ExchangeMarketAdapter):
         except (KeyError, ValueError, TypeError) as exc:
             if self._metrics is not None:
                 self._metrics.parse_errors_total.inc()
-            LOGGER.error("Error parsing message: %s. Exception: %s", message, exc)
+            LOGGER.error(
+                "Error parsing ticker message field. symbol=%s exc_type=%s exc=%s",
+                entry.get("symbol", "<unknown>"),
+                type(exc).__name__,
+                exc,
+            )
         return None
 
     async def close(self) -> None:
@@ -99,6 +104,7 @@ class KrakenAdapter(ExchangeMarketAdapter):
                 if self.websocket is None:
                     await self.connect()
                     await self.subscribe()
+                    attempt = 0
 
                 raw = await asyncio.wait_for(self.websocket.recv(), timeout=15)  # type: ignore[union-attr]
                 parsed = self.parse_message(json.loads(raw))
@@ -106,7 +112,6 @@ class KrakenAdapter(ExchangeMarketAdapter):
                     if self._metrics is not None:
                         self._metrics.ticks_received_total.inc()
                     yield parsed
-                attempt = 0  # Reset backoff after successful receive
             except Exception as exc:
                 LOGGER.warning("WebSocket dropped or error occurred: %s. Retrying with backoff.", exc)
                 await self.close()

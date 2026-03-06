@@ -18,7 +18,7 @@ class NatsServerFixture:
         """Return the NATS connection URL."""
         return f"nats://127.0.0.1:{self.port}"
 
-    def _free_port(self) -> int:
+    def _free_port(self) -> int:  # TODO: TOCTOU risk — replace with port-0 nats-server flag when available
         """Find a free TCP port on localhost."""
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.bind(("127.0.0.1", 0))
