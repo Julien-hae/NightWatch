@@ -109,21 +109,9 @@ class KrakenAdapter(ExchangeMarketAdapter):
             await self._subscribe_async()
 
         while True:
-            if self.websocket is None:
-                self.connect()
-                LOGGER.warning("Websocket was unexpectedly closed. Reconnected.")
             raw = await asyncio.wait_for(self.websocket.recv(), timeout=15)  # type: ignore[union-attr]
             parsed = self.parse_message(json.loads(raw))
             if parsed is not None:
                 if self._metrics is not None:
                     self._metrics.ticks_received_total.inc()
-                if parsed.timestamp is None:
-                    LOGGER.warning("Received tick with missing timestamp: %s. Filling with epoch", parsed)
-                    parsed.timestamp = datetime(1970, 1, 1)
-                yield MarketTick(
-                    timestamp=parsed.timestamp,
-                    symbol=parsed.symbol,
-                    price=parsed.price,
-                    source="Kraken",
-                    schema_version=1,
-                )
+                yield parsed

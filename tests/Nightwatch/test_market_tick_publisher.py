@@ -11,7 +11,8 @@ from typing import Any
 from nats.aio.client import Client as NatsClient
 
 from Nightwatch.models.market_tick import MarketTick
-from Nightwatch.publisher import MarketTickPublisher, NatsServerFixture
+from Nightwatch.publisher import MarketTickPublisher
+from tests.fixtures.nats_server import NatsServerFixture
 
 
 class TestMarketTickPublisherIntegration(unittest.TestCase):
