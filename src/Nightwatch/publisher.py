@@ -58,7 +58,7 @@ class MarketTickPublisher:
         payload = tick.model_dump_json().encode("utf-8")
         await self._nc.publish(subject, payload)
         if flush:
-            await self._nc.flush(timeout=2)
+            await self._nc.flush(timeout=5)
         return subject
 
     @property

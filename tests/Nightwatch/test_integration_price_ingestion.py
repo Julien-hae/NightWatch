@@ -16,6 +16,7 @@ from nats.aio.client import Client as NatsClient
 
 from Nightwatch.kraken_adapter import KrakenAdapter
 from Nightwatch.models.market_tick import MarketTick
+from Nightwatch.models.nats_connection import NatsConnectionConfig
 from Nightwatch.publisher import MarketTickPublisher
 from tests.fixtures.nats_server import NatsServerFixture
 
@@ -45,7 +46,7 @@ class TestPriceIngestionIntegration(unittest.TestCase):
         cls.loop.run_until_complete(cls.adapter.connect())
         cls.loop.run_until_complete(cls.adapter.subscribe())
 
-        cls.publisher = MarketTickPublisher(servers=(cls.nats.url,))
+        cls.publisher = MarketTickPublisher(config=NatsConnectionConfig(servers=[cls.nats.url]))
         cls.loop.run_until_complete(cls.publisher.connect())
 
     @classmethod

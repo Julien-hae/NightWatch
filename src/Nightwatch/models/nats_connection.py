@@ -1,15 +1,15 @@
-"""Defines the NatsConnectionConfig dataclass for shared NATS connection parameters."""
+"""Defines the NatsConnectionConfig Pydantic model for shared NATS connection parameters."""
 
 import re
 from typing import List
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class NatsConnectionConfig(BaseModel):
     """Shared NATS connection parameters."""
 
-    servers: List[str] = ["nats://127.0.0.1:4222"]
+    servers: List[str] = Field(default_factory=lambda: ["nats://127.0.0.1:4222"])
     allow_reconnect: bool = True
     max_reconnect_attempts: int = -1
     reconnect_time_wait: float = 0.2
