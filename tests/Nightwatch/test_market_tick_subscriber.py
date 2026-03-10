@@ -1,3 +1,5 @@
+"""Test suite for the MarketTickSubscriber class, which subscribes to NATS subjects and processes incoming MarketTick messages."""
+
 import asyncio
 import os
 import unittest
