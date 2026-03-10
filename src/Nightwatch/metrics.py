@@ -25,6 +25,18 @@ class NightwatchMetrics:
             "Total number of ticks received from the exchange",
             registry=self.registry,
         )
+        self.ticks_consumed_total = Counter(
+            "ticks_consumed_total",
+            "Total number of ticks consumed by the service",
+            labelnames=["symbol"],
+            registry=self.registry,
+        )
+        self.ticks_published_total = Counter(
+            "ticks_published_total",
+            "Total number of ticks published to NATS",
+            labelnames=["symbol"],
+            registry=self.registry,
+        )
         self.parse_errors_total = Counter(
             "parse_errors_total",
             "Total number of message parse errors",

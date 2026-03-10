@@ -4,6 +4,7 @@ from typing import Any, Awaitable, Callable, Optional
 
 from nats.aio.client import Client as NatsClient
 
+from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.nats_connection import NatsConnectionConfig, normalize_symbol
 
@@ -11,13 +12,11 @@ from Nightwatch.models.nats_connection import NatsConnectionConfig, normalize_sy
 class MarketTickPublisher:
     """Publisher for MarketTick data to a NATS server."""
 
-    def __init__(
-        self,
-        config: Optional[NatsConnectionConfig] = None,
-    ) -> None:
+    def __init__(self, config: Optional[NatsConnectionConfig] = None, metrics: Optional[NightwatchMetrics] = None) -> None:
         """Initialize the MarketTickPublisher with NATS connection parameters."""
         self._nc: NatsClient = NatsClient()
         self._config = config or NatsConnectionConfig()
+        self._metrics = metrics
 
     async def connect(
         self,
@@ -56,6 +55,8 @@ class MarketTickPublisher:
         """Publish a MarketTick to the appropriate subject. Returns the subject used."""
         subject = self.subject_for(tick)
         payload = tick.model_dump_json().encode("utf-8")
+        if self._metrics:
+            self._metrics.ticks_published_total.labels(symbol=tick.symbol).inc()
         await self._nc.publish(subject, payload)
         if flush:
             await self._nc.flush(timeout=5)
