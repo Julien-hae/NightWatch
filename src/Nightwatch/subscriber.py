@@ -57,7 +57,7 @@ class MarketTickSubscriber:
         async def _handler(msg: Msg) -> None:
             tick = MarketTick.model_validate_json(msg.data)
             if self._metrics:
-                self._metrics.ticks_received_total.labels(symbol=tick.symbol).inc()
+                self._metrics.ticks_consumed_total.labels(symbol=tick.symbol).inc()
             if cb is not None:
                 await cb(tick)
 

@@ -55,11 +55,11 @@ class MarketTickPublisher:
         """Publish a MarketTick to the appropriate subject. Returns the subject used."""
         subject = self.subject_for(tick)
         payload = tick.model_dump_json().encode("utf-8")
-        if self._metrics:
-            self._metrics.ticks_published_total.labels(symbol=tick.symbol).inc()
         await self._nc.publish(subject, payload)
         if flush:
             await self._nc.flush(timeout=5)
+        if self._metrics:
+            self._metrics.ticks_published_total.labels(symbol=tick.symbol).inc()
         return subject
 
     @property
