@@ -5,6 +5,7 @@ from typing import Any, Awaitable, Callable, Optional
 from nats.aio.client import Client as NatsClient
 from nats.aio.msg import Msg
 
+from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.nats_connection import NatsConnectionConfig
 
@@ -12,10 +13,11 @@ from Nightwatch.models.nats_connection import NatsConnectionConfig
 class MarketTickSubscriber:
     """Subscriber for MarketTick data from a NATS server."""
 
-    def __init__(self, config: Optional[NatsConnectionConfig] = None) -> None:
+    def __init__(self, config: Optional[NatsConnectionConfig] = None, metrics: Optional[NightwatchMetrics] = None) -> None:
         """Initialize the MarketTickSubscriber with NATS connection parameters."""
         self._nc: NatsClient = NatsClient()
         self._config = config or NatsConnectionConfig()
+        self._metrics = metrics
 
     async def connect(
         self,
@@ -54,6 +56,8 @@ class MarketTickSubscriber:
 
         async def _handler(msg: Msg) -> None:
             tick = MarketTick.model_validate_json(msg.data)
+            if self._metrics:
+                self._metrics.ticks_consumed_total.labels(symbol=tick.symbol).inc()
             if cb is not None:
                 await cb(tick)
 

@@ -17,12 +17,26 @@ class NightwatchMetrics:
     ticks_received_total: Counter = field(init=False)
     parse_errors_total: Counter = field(init=False)
     ws_reconnects_total: Counter = field(init=False)
+    ticks_published_total: Counter = field(init=False)
+    ticks_consumed_total: Counter = field(init=False)
 
     def __post_init__(self) -> None:
         """Create Prometheus counters bound to the instance registry."""
         self.ticks_received_total = Counter(
             "ticks_received_total",
             "Total number of ticks received from the exchange",
+            registry=self.registry,
+        )
+        self.ticks_consumed_total = Counter(
+            "ticks_consumed_total",
+            "Total number of ticks consumed by the service",
+            labelnames=["symbol"],
+            registry=self.registry,
+        )
+        self.ticks_published_total = Counter(
+            "ticks_published_total",
+            "Total number of ticks published to NATS",
+            labelnames=["symbol"],
             registry=self.registry,
         )
         self.parse_errors_total = Counter(

@@ -89,6 +89,8 @@ class TestMetricsEndpoint(unittest.TestCase):
         self.assertIn("ticks_received_total", body)
         self.assertIn("parse_errors_total", body)
         self.assertIn("ws_reconnects_total", body)
+        self.assertIn("ticks_consumed_total", body)
+        self.assertIn("ticks_published_total", body)
 
     def test_metrics_reflects_incremented_counters(self) -> None:
         """After incrementing counters, the /metrics response should reflect the new values."""
@@ -101,6 +103,22 @@ class TestMetricsEndpoint(unittest.TestCase):
         self.assertIn("ticks_received_total 5.0", body)
         self.assertIn("parse_errors_total 2.0", body)
         self.assertIn("ws_reconnects_total 1.0", body)
+        self.assertIn("ticks_consumed_total", body)
+        self.assertIn("ticks_published_total", body)
+
+    def test_metrics_reflects_incremented_labeled_counters(self) -> None:
+        """After incrementing labeled counters, the /metrics response should reflect the new values per symbol."""
+        self.metrics.ticks_consumed_total.labels(symbol="BTC/USD").inc(3)
+        self.metrics.ticks_consumed_total.labels(symbol="ETH/USD").inc(7)
+        self.metrics.ticks_published_total.labels(symbol="BTC/USD").inc(4)
+        self.metrics.ticks_published_total.labels(symbol="ETH/USD").inc(2)
+        response = self.client.get("/metrics")
+
+        body = response.text
+        self.assertIn('ticks_consumed_total{symbol="BTC/USD"} 3.0', body)
+        self.assertIn('ticks_consumed_total{symbol="ETH/USD"} 7.0', body)
+        self.assertIn('ticks_published_total{symbol="BTC/USD"} 4.0', body)
+        self.assertIn('ticks_published_total{symbol="ETH/USD"} 2.0', body)
 
     def tearDown(self) -> None:
         """Reset any global state if necessary after each test."""
