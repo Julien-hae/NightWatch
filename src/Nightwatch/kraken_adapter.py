@@ -90,13 +90,7 @@ class KrakenAdapter(ExchangeMarketAdapter):
                 self.websocket = None
 
     async def stream_ticks(self, backoff_base: int = 2, backoff_max: int = 60) -> AsyncIterator[MarketTick]:
-        """Yield a continuous stream of validated pydantic MarketTick objects.
-
-        Connects and subscribes automatically on first call.
-        Skips control / heartbeat messages.
-        Runs indefinitely until the caller breaks out or the websocket closes.
-        Implements retry with exponential backoff on websocket drop (issue #13).
-        """
+        """Yield a continuous stream of validated pydantic MarketTick objects."""
         attempt = 0
 
         while True:
