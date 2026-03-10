@@ -12,6 +12,7 @@ from typing import Any
 from nats.aio.client import Client as NatsClient
 
 from Nightwatch.models.market_tick import MarketTick
+from Nightwatch.models.nats_connection import NatsConnectionConfig
 from Nightwatch.publisher import MarketTickPublisher
 from tests.fixtures.nats_server import NatsServerFixture
 
@@ -46,7 +47,7 @@ class TestMarketTickPublisherIntegration(unittest.TestCase):
         """Publisher connects to the NATS server without error."""
 
         async def _test() -> None:
-            pub = MarketTickPublisher(servers=(self.nats.url,))
+            pub = MarketTickPublisher(config=NatsConnectionConfig(servers=[self.nats.url]))
             await pub.connect()
             self.assertTrue(pub.client.is_connected)
             await pub.close()
@@ -57,7 +58,7 @@ class TestMarketTickPublisherIntegration(unittest.TestCase):
         """Publishing a MarketTick succeeds and returns the correct subject."""
 
         async def _test() -> None:
-            pub = MarketTickPublisher(servers=(self.nats.url,))
+            pub = MarketTickPublisher(config=NatsConnectionConfig(servers=[self.nats.url]))
             await pub.connect()
 
             tick = MarketTick(
@@ -80,7 +81,7 @@ class TestMarketTickPublisherIntegration(unittest.TestCase):
             await sub_client.connect(servers=[self.nats.url])
             sub = await sub_client.subscribe("market.tick.BTCUSD")
 
-            pub = MarketTickPublisher(servers=(self.nats.url,))
+            pub = MarketTickPublisher(config=NatsConnectionConfig(servers=[self.nats.url]))
             await pub.connect()
             tick = MarketTick(
                 timestamp=datetime.now(timezone.utc), symbol="BTC/USD", price=Decimal("42000.0"), source="Kraken", schema_version=1
@@ -124,9 +125,7 @@ class TestMarketTickPublisherIntegration(unittest.TestCase):
                 reconnected.set()
 
             pub = MarketTickPublisher(
-                servers=(self.nats.url,),
-                reconnect_time_wait=0.1,
-                max_reconnect_attempts=-1,
+                config=NatsConnectionConfig(servers=[self.nats.url], reconnect_time_wait=0.1, max_reconnect_attempts=-1)
             )
             await pub.connect(
                 on_disconnected=_on_disconnect,

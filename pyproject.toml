@@ -16,7 +16,6 @@ nats-py = "^2.13.1"
 fastapi = "^0.135.1"
 prometheus-client = "^0.24.1"
 httpx = "^0.28.1"
-numpy = "^2.4.2"
 
 [tool.poetry.group.dev.dependencies]
 coverage = {extras = ["toml"], version = "~7.4"}    # Code coverage measurement for Python
@@ -37,7 +36,6 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.mypy]
 python_version = "3.11"
-plugins = "numpy.typing.mypy_plugin"
 strict = true
 
 [tool.coverage.run]

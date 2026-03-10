@@ -9,7 +9,7 @@ Night gathers, and now my watch begins. It shall not end until my portfolio dies
 ```mermaid
 graph LR
     %% Node Definitions
-    Fetch[/Alpaca API/]
+    Fetch[/Market API/]
     Fetch --> Kill{Kill Switch?}
 
     Kill -- Yes --> Stop[🛑 Halt]
@@ -36,7 +36,7 @@ graph LR
 
 ## Getting Started
 
-This is a basic project you can fork. So far, the only things it can do is just "Hello World" but you can call it directly in the terminal after the installation using the command `poetry run entrypoint -w World`
+TODO
 
 ## Setup
 ### Install WSL

@@ -11,7 +11,6 @@ from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.tick_recorder import MarketTickRecorder
 
 
-@unittest.skipUnless(os.environ.get("RUN_INTEGRATION"), "Integration tests require RUN_INTEGRATION=1")
 class TestMarketTickRecorder(unittest.TestCase):
     """Test that each tick are recorded into a file in the correct format and in the correct order."""
 
