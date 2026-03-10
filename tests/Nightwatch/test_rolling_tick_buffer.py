@@ -1,6 +1,7 @@
-"""TODO"""
+"""Integration test for the rolling TickBuffer fed by Kraken adapters over a NATS pub/sub pipeline."""
 
 import asyncio
+import os
 import unittest
 from collections.abc import Coroutine
 from typing import Any
@@ -14,6 +15,7 @@ from Nightwatch.subscriber import MarketTickSubscriber
 from tests.fixtures.nats_server import NatsServerFixture
 
 
+@unittest.skipUnless(os.environ.get("RUN_INTEGRATION"), "Integration tests require RUN_INTEGRATION=1")
 class TestTickBuffer(unittest.TestCase):
     """Test suite for the RollingTickBuffer."""
 
