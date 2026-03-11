@@ -1,11 +1,9 @@
 """Defines the MarketTickPublisher class for publishing MarketTick data to a NATS server."""
 
 import logging
-from typing import Optional
 
-from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
-from Nightwatch.models.nats_connection import NatsConnectionConfig, normalize_symbol
+from Nightwatch.models.nats_connection import normalize_symbol
 from Nightwatch.nats_connection import NatsConnector
 
 LOGGER = logging.getLogger(__name__)
@@ -13,10 +11,6 @@ LOGGER = logging.getLogger(__name__)
 
 class MarketTickPublisher(NatsConnector):
     """Publisher for MarketTick data to a NATS server."""
-
-    def __init__(self, config: Optional[NatsConnectionConfig] = None, metrics: Optional[NightwatchMetrics] = None) -> None:
-        """Initialize the MarketTickPublisher with NATS connection parameters."""
-        super().__init__(config=config, metrics=metrics)
 
     @staticmethod
     def subject_for(tick: MarketTick) -> str:
