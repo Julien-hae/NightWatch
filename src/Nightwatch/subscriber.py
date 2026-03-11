@@ -1,13 +1,17 @@
 """Defines the MarketTickSubscriber class for subscribing to MarketTick data from a NATS server."""
 
+import logging
 from typing import Any, Awaitable, Callable, Optional
 
 from nats.aio.client import Client as NatsClient
 from nats.aio.msg import Msg
+from pydantic import ValidationError
 
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.nats_connection import NatsConnectionConfig
+
+LOGGER = logging.getLogger(__name__)
 
 
 class MarketTickSubscriber:
@@ -53,9 +57,17 @@ class MarketTickSubscriber:
         cb: Optional[Callable[[MarketTick], Awaitable[Any]]] = None,
     ) -> None:
         """Subscribe to a subject, calling cb with each received MarketTick."""
+        if not self._nc.is_connected:
+            LOGGER.warning("NATS subscriber is not connected. Calling connect(),")
+            await self.connect()
 
         async def _handler(msg: Msg) -> None:
-            tick = MarketTick.model_validate_json(msg.data)
+            try:
+                tick = MarketTick.model_validate_json(msg.data)
+            except ValidationError as exc:
+                if self._metrics is not None:
+                    self._metrics.parse_errors_total.inc()
+                LOGGER.error("Error parsing ticker message %s. exc=%s", msg, exc)
             if self._metrics:
                 self._metrics.ticks_consumed_total.labels(symbol=tick.symbol).inc()
             if cb is not None:

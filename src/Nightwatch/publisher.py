@@ -1,5 +1,6 @@
 """Defines the MarketTickPublisher class for publishing MarketTick data to a NATS server."""
 
+import logging
 from typing import Any, Awaitable, Callable, Optional
 
 from nats.aio.client import Client as NatsClient
@@ -7,6 +8,8 @@ from nats.aio.client import Client as NatsClient
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.nats_connection import NatsConnectionConfig, normalize_symbol
+
+LOGGER = logging.getLogger(__name__)
 
 
 class MarketTickPublisher:
@@ -53,6 +56,10 @@ class MarketTickPublisher:
 
     async def publish(self, tick: MarketTick, *, flush: bool = True) -> str:
         """Publish a MarketTick to the appropriate subject. Returns the subject used."""
+        if not self._nc.is_connected:
+            LOGGER.warning("NATS publisher is not connected. Calling connect(),")
+            await self.connect()
+
         subject = self.subject_for(tick)
         payload = tick.model_dump_json().encode("utf-8")
         await self._nc.publish(subject, payload)
