@@ -5,7 +5,7 @@ import json
 import logging
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, AsyncIterator, Dict, Optional
+from typing import Any, AsyncIterator
 
 from websockets import connect
 from websockets.asyncio.client import ClientConnection
@@ -21,10 +21,10 @@ LOGGER = logging.getLogger(__name__)
 class KrakenAdapter(ExchangeMarketAdapter):
     """Adapter to ingest live stock data from the Kraken API."""
 
-    def __init__(self, symbol: str = "BTC/USD", metrics: Optional[NightwatchMetrics] = None) -> None:
+    def __init__(self, symbol: str = "BTC/USD", metrics: NightwatchMetrics | None = None) -> None:
         """Initialize the KrakenAdapter class."""
         super().__init__()
-        self.websocket: Optional[ClientConnection] = None
+        self.websocket: ClientConnection | None = None
         self.uri = "wss://ws.kraken.com/v2"
         self.symbol = symbol
         self._metrics = metrics
@@ -49,7 +49,7 @@ class KrakenAdapter(ExchangeMarketAdapter):
         }
         await self.websocket.send(json.dumps(subscribe_message))
 
-    def parse_message(self, message: Optional[Dict[str, Any]]) -> Optional[MarketTick]:
+    def parse_message(self, message: dict[str, Any] | None) -> MarketTick | None:
         """Parse a message received from the websocket and return a MarketTick, or None for non-ticker messages."""
         if not isinstance(message, dict):
             return None

@@ -1,7 +1,6 @@
 """MarketTickRecorder class for recording MarketTick data."""
 
 import os
-from typing import List
 
 from Nightwatch.models.market_tick import MarketTick
 
@@ -22,7 +21,7 @@ class MarketTickRecorder:
         with open(self.path, "a", encoding="utf-8") as f:
             f.write(tick.model_dump_json() + "\n")
 
-    def record_ticks(self, ticks: List[MarketTick]) -> None:
+    def record_ticks(self, ticks: list[MarketTick]) -> None:
         """Record mutliple ticks to the file in JSONL format."""
         with open(self.path, "a", encoding="utf-8") as f:
             for tick in ticks:

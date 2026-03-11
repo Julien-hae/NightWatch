@@ -1,7 +1,7 @@
 """Module for ingesting live stock data from any API."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any
 
 from Nightwatch.models.market_tick import MarketTick
 
@@ -22,5 +22,5 @@ class ExchangeMarketAdapter(ABC):
         """Close the websocket connection."""
 
     @abstractmethod
-    def parse_message(self, message: Optional[Dict[str, Any]]) -> Optional[MarketTick]:
+    def parse_message(self, message: dict[str, Any] | None) -> MarketTick | None:
         """Parse a message received from the websocket and return a MarketTick object."""

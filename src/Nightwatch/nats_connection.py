@@ -1,7 +1,7 @@
 """Defines the NatsConnector class for connecting to a NATS server."""
 
 import logging
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any, Awaitable, Callable
 
 from nats.aio.client import Client as NatsClient
 
@@ -14,7 +14,7 @@ LOGGER = logging.getLogger(__name__)
 class NatsConnector:
     """Connector for NATS server."""
 
-    def __init__(self, config: Optional[NatsConnectionConfig] = None, metrics: Optional[NightwatchMetrics] = None) -> None:
+    def __init__(self, config: NatsConnectionConfig | None = None, metrics: NightwatchMetrics | None = None) -> None:
         """Initialize the NatsConnector with NATS connection parameters."""
         self._nc: NatsClient = NatsClient()
         self._config = config or NatsConnectionConfig()
@@ -23,8 +23,8 @@ class NatsConnector:
     async def connect(
         self,
         *,
-        on_disconnected: Optional[Callable[[], Awaitable[Any]]] = None,
-        on_reconnected: Optional[Callable[[], Awaitable[Any]]] = None,
+        on_disconnected: Callable[[], Awaitable[Any]] | None = None,
+        on_reconnected: Callable[[], Awaitable[Any]] | None = None,
     ) -> None:
         """Connect to the NATS server with optional callbacks for disconnect/reconnect events."""
 
