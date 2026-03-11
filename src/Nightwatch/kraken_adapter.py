@@ -9,6 +9,7 @@ from typing import Any, AsyncIterator, Dict, Optional
 
 from websockets import connect
 from websockets.asyncio.client import ClientConnection
+from websockets.exceptions import WebSocketException
 
 from Nightwatch.exchange_market_adapter import ExchangeMarketAdapter
 from Nightwatch.metrics import NightwatchMetrics
@@ -106,8 +107,8 @@ class KrakenAdapter(ExchangeMarketAdapter):
                     if self._metrics is not None:
                         self._metrics.ticks_received_total.inc()
                     yield parsed
-            except Exception as exc:
-                LOGGER.warning("WebSocket dropped or error occurred: %s. Retrying with backoff.", exc)
+            except (ConnectionError, asyncio.TimeoutError, WebSocketException) as exc:
+                LOGGER.warning("WebSocket dropped: %s. Retrying with backoff.", exc)
                 await self.close()
                 if self._metrics is not None:
                     self._metrics.ws_reconnects_total.inc()
