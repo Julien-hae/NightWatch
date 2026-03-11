@@ -42,6 +42,7 @@ class MarketTickSubscriber(NatsConnector):
                 if self._metrics is not None:
                     self._metrics.parse_errors_total.inc()
                 LOGGER.error("Error parsing ticker message %s. exc=%s", msg, exc)
+                raise
             if self._metrics:
                 self._metrics.ticks_consumed_total.labels(symbol=tick.symbol).inc()
             if cb is not None:

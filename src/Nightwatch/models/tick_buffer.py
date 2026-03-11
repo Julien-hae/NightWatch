@@ -8,7 +8,7 @@ from pydantic.dataclasses import dataclass
 from Nightwatch.models.market_tick import MarketTick
 
 
-@dataclass
+@dataclass(config=ConfigDict(str_max_length=255))
 class TickBuffer:
     """Model to represent a buffer for storing recent MarketTick data."""
 
