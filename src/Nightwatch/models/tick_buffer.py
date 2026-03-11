@@ -2,12 +2,14 @@
 
 from collections import deque
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+from pydantic.dataclasses import dataclass
 
 from Nightwatch.models.market_tick import MarketTick
 
 
-class TickBuffer(BaseModel):
+@dataclass
+class TickBuffer:
     """Model to represent a buffer for storing recent MarketTick data."""
 
     ticks: dict[str, deque[MarketTick]] = Field(default_factory=dict)
