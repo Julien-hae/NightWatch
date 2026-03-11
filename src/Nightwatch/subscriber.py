@@ -49,4 +49,4 @@ class MarketTickSubscriber(NatsConnector):
                 await cb(tick)
 
         self._subscription = await self._nc.subscribe(subject=subject, cb=_handler)
-        await self._nc.flush()
+        await self.client.flush()
