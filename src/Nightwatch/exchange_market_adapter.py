@@ -9,9 +9,6 @@ from Nightwatch.models.market_tick import MarketTick
 class ExchangeMarketAdapter(ABC):
     """Class to ingest live stock data from any API."""
 
-    def __init__(self) -> None:
-        """Initialize the ExchangeMarketAdapter class."""
-
     @abstractmethod
     async def connect(self) -> None:
         """Connect to a websocket to receive live stock data."""
