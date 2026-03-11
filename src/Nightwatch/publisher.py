@@ -2,8 +2,8 @@
 
 import logging
 
+from Nightwatch.common.utils import normalize_symbol
 from Nightwatch.models.market_tick import MarketTick
-from Nightwatch.models.nats_connection import normalize_symbol
 from Nightwatch.nats_connection import NatsConnector
 
 LOGGER = logging.getLogger(__name__)

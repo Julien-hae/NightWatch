@@ -1,7 +1,5 @@
 """Defines the NatsConnectionConfig Pydantic model for shared NATS connection parameters."""
 
-import re
-
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -16,8 +14,3 @@ class NatsConnectionConfig(BaseModel):
     max_outstanding_pings: int = 2
 
     model_config = ConfigDict(str_max_length=255)
-
-
-def normalize_symbol(symbol: str) -> str:
-    """Normalize a symbol string to be used in NATS subjects (e.g., "BTC/USD" -> "BTCUSD")."""
-    return re.sub(r"[^A-Za-z0-9]", "", symbol).upper()
