@@ -17,11 +17,11 @@ class TestHealthEndpoint(unittest.TestCase):
         self.health = ServiceHealth(ws_connected=False, nats_connected=False)
         self.client = TestClient(create_app(health=self.health))
 
-    def test_healthz_returns_200(self) -> None:
-        """The /healthz endpoint should return a 200 OK status."""
+    def test_healthz_returns_503_when_unhealthy(self) -> None:
+        """The /healthz endpoint should return a 503 Service Unavailable status when unhealthy."""
         response = self.client.get("/healthz")
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 503)
         self.assertEqual(
             response.json(),
             {"ws_connected": False, "nats_connected": False},
@@ -45,7 +45,7 @@ class TestHealthEndpoint(unittest.TestCase):
         self.health.nats_connected = False
         response = self.client.get("/healthz")
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 503)
         self.assertEqual(
             response.json(),
             {"ws_connected": True, "nats_connected": False},
@@ -57,7 +57,7 @@ class TestHealthEndpoint(unittest.TestCase):
         self.health.nats_connected = True
         response = self.client.get("/healthz")
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 503)
         self.assertEqual(
             response.json(),
             {"ws_connected": False, "nats_connected": True},
