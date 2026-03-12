@@ -1,3 +1,4 @@
+# mypy: disable-error-code="import-untyped"
 """Integration tests for the MarketTickPublisher with a real NATS server."""
 
 import asyncio
@@ -5,7 +6,6 @@ import json
 import os
 import unittest
 from collections.abc import Coroutine
-from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -15,6 +15,7 @@ from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.nats_connection import NatsConnectionConfig
 from Nightwatch.publisher import MarketTickPublisher
 from tests.fixtures.nats_server import NatsServerFixture
+from tests.fixtures.tick_factory import make_tick
 
 
 @unittest.skipUnless(os.environ.get("RUN_INTEGRATION"), "Integration tests require RUN_INTEGRATION=1")
@@ -61,9 +62,7 @@ class TestMarketTickPublisherIntegration(unittest.TestCase):
             pub = MarketTickPublisher(config=NatsConnectionConfig(servers=[self.nats.url]))
             await pub.connect()
 
-            tick = MarketTick(
-                timestamp=datetime.now(timezone.utc), symbol="BTC/USD", price=Decimal("42000.0"), source="Kraken", schema_version=1
-            )
+            tick = make_tick()
             subject = await pub.publish(tick)
 
             self.assertEqual(subject, "market.tick.BTCUSD")
@@ -83,9 +82,7 @@ class TestMarketTickPublisherIntegration(unittest.TestCase):
 
             pub = MarketTickPublisher(config=NatsConnectionConfig(servers=[self.nats.url]))
             await pub.connect()
-            tick = MarketTick(
-                timestamp=datetime.now(timezone.utc), symbol="BTC/USD", price=Decimal("42000.0"), source="Kraken", schema_version=1
-            )
+            tick = make_tick()
             await pub.publish(tick)
 
             try:
@@ -138,9 +135,7 @@ class TestMarketTickPublisherIntegration(unittest.TestCase):
             self.nats.start()
             await asyncio.wait_for(reconnected.wait(), timeout=10)
             self.assertTrue(pub.client.is_connected)
-            tick = MarketTick(
-                timestamp=datetime.now(timezone.utc), symbol="BTC/USD", price=Decimal("99000.0"), source="Kraken", schema_version=1
-            )
+            tick = make_tick()
             subject = await pub.publish(tick)
             self.assertEqual(subject, "market.tick.BTCUSD")
 

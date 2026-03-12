@@ -1,14 +1,14 @@
+# mypy: disable-error-code="import-untyped"
 """Integration tests for the MarketTickRecorder class, which records MarketTick data to a file."""
 
 import json
 import os
 import tempfile
 import unittest
-from datetime import datetime, timezone
 from decimal import Decimal
 
-from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.tick_recorder import MarketTickRecorder
+from tests.fixtures.tick_factory import make_tick
 
 
 class TestMarketTickRecorder(unittest.TestCase):
@@ -18,15 +18,9 @@ class TestMarketTickRecorder(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.path = os.path.join(self.temp_dir.name, "test_ticks.jsonl")
         self.tick_recorder = MarketTickRecorder(path=self.path)
-        self.tick1 = MarketTick(
-            timestamp=datetime.now(timezone.utc), symbol="BTC/USD", price=Decimal("42000.0"), source="Kraken", schema_version=1
-        )
-        self.tick2 = MarketTick(
-            timestamp=datetime.now(timezone.utc), symbol="ETH/USD", price=Decimal("3000.0"), source="Kraken", schema_version=1
-        )
-        self.tick3 = MarketTick(
-            timestamp=datetime.now(timezone.utc), symbol="LTC/USD", price=Decimal("150.0"), source="Kraken", schema_version=1
-        )
+        self.tick1 = make_tick()
+        self.tick2 = make_tick(symbol="ETH/USD", price=Decimal("3000.0"))
+        self.tick3 = make_tick(symbol="LTC/USD", price=Decimal("150.0"))
 
     def test_record_ticks(self) -> None:
         """Test that ticks are recorded in the correct format and order."""

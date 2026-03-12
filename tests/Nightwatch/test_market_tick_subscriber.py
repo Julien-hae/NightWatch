@@ -5,8 +5,6 @@ import asyncio
 import os
 import unittest
 from collections.abc import Coroutine
-from datetime import datetime, timezone
-from decimal import Decimal
 from typing import Any
 
 from prometheus_client import CollectorRegistry
@@ -17,6 +15,7 @@ from Nightwatch.models.nats_connection import NatsConnectionConfig
 from Nightwatch.publisher import MarketTickPublisher
 from Nightwatch.subscriber import MarketTickSubscriber
 from tests.fixtures.nats_server import NatsServerFixture
+from tests.fixtures.tick_factory import make_tick
 
 
 @unittest.skipUnless(os.environ.get("RUN_INTEGRATION"), "Integration tests require RUN_INTEGRATION=1")
@@ -47,14 +46,7 @@ class TestMarketTickSubscriber(unittest.TestCase):
 
         cls.publisher = MarketTickPublisher(config=NatsConnectionConfig(servers=[cls.nats.url]))
         cls.loop.run_until_complete(cls.publisher.connect())
-
-        cls.tick = MarketTick(
-            symbol="BTC/USD",
-            price=Decimal("50000.0"),
-            timestamp=datetime.now(timezone.utc),
-            source="test",
-            schema_version=1,
-        )
+        cls.tick = make_tick()
 
     @classmethod
     def tearDownClass(cls) -> None:

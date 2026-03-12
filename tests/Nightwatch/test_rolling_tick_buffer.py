@@ -16,6 +16,7 @@ from Nightwatch.models.tick_buffer import TickBuffer
 from Nightwatch.publisher import MarketTickPublisher
 from Nightwatch.subscriber import MarketTickSubscriber
 from tests.fixtures.nats_server import NatsServerFixture
+from tests.fixtures.tick_factory import make_tick
 
 
 @unittest.skipUnless(os.environ.get("RUN_INTEGRATION"), "Integration tests require RUN_INTEGRATION=1")
@@ -114,15 +115,15 @@ class TestTickBuffer(unittest.TestCase):
     def test_given_buffer_of_3_when_4_ticks_added_then_oldest_evicted(self) -> None:
         """Test that when more than max_ticks_per_symbol are added, the oldest tick is evicted from the buffer."""
         for i in range(4):
-            tick = MarketTick(symbol="BTC/USD", price=Decimal(str(i)), timestamp=datetime.now(timezone.utc))
+            tick = make_tick(price=Decimal(str(i)), timestamp=datetime.now(timezone.utc))
             self.buffer.add_tick(tick)
         self.assertEqual(len(self.buffer.ticks["BTC/USD"]), 3)
         self.assertEqual(self.buffer.ticks["BTC/USD"][0].price, Decimal("1"))  # oldest evicted
 
     def test_given_two_symbols_when_ticks_added_then_isolated(self) -> None:
         """Test that ticks for different symbols are stored in separate buffers and do not interfere with each other."""
-        btc_tick = MarketTick(symbol="BTC/USD", price=Decimal("0"), timestamp=datetime.now(timezone.utc))
-        eth_tick = MarketTick(symbol="ETH/USD", price=Decimal("0"), timestamp=datetime.now(timezone.utc))
+        btc_tick = make_tick(symbol="BTC/USD")
+        eth_tick = make_tick(symbol="ETH/USD")
         self.buffer.add_tick(btc_tick)
         self.buffer.add_tick(eth_tick)
         self.assertIn("BTC/USD", self.buffer.ticks)
@@ -138,7 +139,7 @@ class TestTickBuffer(unittest.TestCase):
         buf = TickBuffer(max_ticks_per_symbol=5)
         timestamps = [datetime(2024, 1, 1, i, tzinfo=timezone.utc) for i in range(5)]
         for ts in timestamps:
-            tick = MarketTick(symbol="BTC/USD", price=Decimal("0"), timestamp=ts)
+            tick = make_tick(symbol="BTC/USD", timestamp=ts)
             buf.add_tick(tick)
         stored = list(buf.ticks["BTC/USD"])
         self.assertEqual([t.timestamp for t in stored], timestamps)
