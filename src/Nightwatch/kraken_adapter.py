@@ -21,11 +21,11 @@ LOGGER = logging.getLogger(__name__)
 class KrakenAdapter(ExchangeMarketAdapter):
     """Adapter to ingest live stock data from the Kraken API."""
 
-    def __init__(self, symbol: str = "BTC/USD", metrics: NightwatchMetrics | None = None) -> None:
+    def __init__(self, symbol: str = "BTC/USD", uri: str = "wss://ws.kraken.com/v2", metrics: NightwatchMetrics | None = None) -> None:
         """Initialize the KrakenAdapter class."""
         super().__init__()
         self.websocket: ClientConnection | None = None
-        self.uri = "wss://ws.kraken.com/v2"
+        self.uri = uri
         self.symbol = symbol
         self._metrics = metrics
 
