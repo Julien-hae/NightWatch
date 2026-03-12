@@ -22,3 +22,7 @@ class TickBuffer:
     def add_tick(self, tick: MarketTick) -> None:
         """Add a tick to the per-symbol buffer, maintaining a rolling window up to max_ticks_per_symbol."""
         self.ticks[tick.symbol].append(tick)
+
+    def get_ticks(self, symbol: str) -> deque[MarketTick]:
+        """Get the list of ticks for a given symbol, or an empty list if no ticks are stored for that symbol."""
+        return deque(self.ticks.get(symbol, []))

@@ -95,18 +95,18 @@ class TestTickBuffer(unittest.TestCase):
 
             self.assertIn("BTC/USD", self.buffer.ticks)
             self.assertIn("ETH/USD", self.buffer.ticks)
-            self.assertLessEqual(len(self.buffer.ticks["BTC/USD"]), self.buffer.max_ticks_per_symbol)
-            self.assertLessEqual(len(self.buffer.ticks["ETH/USD"]), self.buffer.max_ticks_per_symbol)
+            self.assertLessEqual(len(self.buffer.get_ticks("BTC/USD")), self.buffer.max_ticks_per_symbol)
+            self.assertLessEqual(len(self.buffer.get_ticks("ETH/USD")), self.buffer.max_ticks_per_symbol)
             self.assertTrue(
                 all(
                     earlier.timestamp <= later.timestamp
-                    for earlier, later in zip(self.buffer.ticks["ETH/USD"], self.buffer.ticks["ETH/USD"][1:])
+                    for earlier, later in zip(self.buffer.get_ticks("ETH/USD"), list(self.buffer.get_ticks("ETH/USD"))[1:])
                 )
             )
             self.assertTrue(
                 all(
                     earlier.timestamp <= later.timestamp
-                    for earlier, later in zip(self.buffer.ticks["BTC/USD"], self.buffer.ticks["BTC/USD"][1:])
+                    for earlier, later in zip(self.buffer.get_ticks("BTC/USD"), list(self.buffer.get_ticks("BTC/USD"))[1:])
                 )
             )
 
@@ -117,8 +117,8 @@ class TestTickBuffer(unittest.TestCase):
         for i in range(4):
             tick = make_tick(price=Decimal(str(i)), timestamp=datetime.now(timezone.utc))
             self.buffer.add_tick(tick)
-        self.assertEqual(len(self.buffer.ticks["BTC/USD"]), 3)
-        self.assertEqual(self.buffer.ticks["BTC/USD"][0].price, Decimal("1"))  # oldest evicted
+        self.assertEqual(len(self.buffer.get_ticks("BTC/USD")), 3)
+        self.assertEqual(self.buffer.get_ticks("BTC/USD")[0].price, Decimal("1"))  # oldest evicted
 
     def test_given_two_symbols_when_ticks_added_then_isolated(self) -> None:
         """Test that ticks for different symbols are stored in separate buffers and do not interfere with each other."""
@@ -141,5 +141,5 @@ class TestTickBuffer(unittest.TestCase):
         for ts in timestamps:
             tick = make_tick(symbol="BTC/USD", timestamp=ts)
             buf.add_tick(tick)
-        stored = list(buf.ticks["BTC/USD"])
+        stored = list(buf.get_ticks("BTC/USD"))
         self.assertEqual([t.timestamp for t in stored], timestamps)

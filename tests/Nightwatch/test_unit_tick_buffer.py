@@ -24,8 +24,8 @@ class TestTickBuffer(unittest.TestCase):
         for i in range(4):
             tick = make_tick(price=Decimal(str(i)))
             self.buffer.add_tick(tick)
-        self.assertEqual(len(self.buffer.ticks["BTC/USD"]), 3)
-        self.assertEqual(self.buffer.ticks["BTC/USD"][0].price, Decimal("1"))  # oldest evicted
+        self.assertEqual(len(self.buffer.get_ticks("BTC/USD")), 3)
+        self.assertEqual(self.buffer.get_ticks("BTC/USD")[0].price, Decimal("1"))  # oldest evicted
 
     def test_given_two_symbols_when_ticks_added_then_isolated(self) -> None:
         """Test that ticks for different symbols are stored in separate buffers and do not interfere with each other."""
@@ -48,5 +48,5 @@ class TestTickBuffer(unittest.TestCase):
         for ts in timestamps:
             tick = make_tick(symbol="BTC/USD", timestamp=ts)
             buf.add_tick(tick)
-        stored = list(buf.ticks["BTC/USD"])
+        stored = list(buf.get_ticks("BTC/USD"))
         self.assertEqual([t.timestamp for t in stored], timestamps)
