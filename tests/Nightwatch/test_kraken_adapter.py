@@ -23,6 +23,11 @@ class TestKrakenAdapter(unittest.TestCase):
         """Set up the KrakenAdapter instance for testing."""
         self.adapter = KrakenAdapter()
 
+    def test_subscribe_raises_when_not_connected(self) -> None:
+        """Test that subscribe raises a ConnectionError if connect() has not been called."""
+        with self.assertRaises(ConnectionError):
+            asyncio.run(self.adapter.subscribe())
+
     def test_parse_message(self) -> None:
         """Test the parse_message method of the KrakenAdapter class."""
         message: dict[str, Any] = {
@@ -79,7 +84,7 @@ class TestKrakenAdapter(unittest.TestCase):
         mock_ws = AsyncMock()
         mock_connect.return_value = mock_ws
         asyncio.run(self.adapter.connect())
-        mock_connect.assert_called_once_with(self.adapter.uri, max_size=1048576)
+        mock_connect.assert_called_once_with(self.adapter.uri, max_size=65536)
         self.assertEqual(self.adapter.websocket, mock_ws)
 
     def test_subscribe(self) -> None:

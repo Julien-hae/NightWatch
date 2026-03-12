@@ -32,7 +32,7 @@ class KrakenAdapter(ExchangeMarketAdapter):
     async def connect(self) -> None:
         """Connect to the Kraken websocket."""
         try:
-            self.websocket = await connect(self.uri, max_size=1048576)
+            self.websocket = await connect(self.uri, max_size=65536)
         except Exception as e:
             raise ConnectionError(f"Failed to connect to Kraken websocket: {e}") from e
 
