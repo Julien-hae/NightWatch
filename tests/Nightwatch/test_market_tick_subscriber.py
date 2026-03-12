@@ -1,3 +1,4 @@
+# mypy: disable-error-code="import-untyped"
 """Test suite for the MarketTickSubscriber class, which subscribes to NATS subjects and processes incoming MarketTick messages."""
 
 import asyncio
@@ -8,6 +9,9 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 
+from prometheus_client import CollectorRegistry
+
+from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.nats_connection import NatsConnectionConfig
 from Nightwatch.publisher import MarketTickPublisher
@@ -24,6 +28,7 @@ class TestMarketTickSubscriber(unittest.TestCase):
     publisher: MarketTickPublisher
     subscriber: MarketTickSubscriber
     tick: MarketTick
+    metric: NightwatchMetrics
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -31,9 +36,12 @@ class TestMarketTickSubscriber(unittest.TestCase):
         cls.nats.start()
 
         cls.loop = asyncio.new_event_loop()
+        registry = CollectorRegistry()
+        cls.metric = NightwatchMetrics(registry=registry)
 
         cls.subscriber = MarketTickSubscriber(
-            config=NatsConnectionConfig(servers=[cls.nats.url], reconnect_time_wait=0.1, max_reconnect_attempts=-1)
+            config=NatsConnectionConfig(servers=[cls.nats.url], reconnect_time_wait=0.1, max_reconnect_attempts=-1),
+            metrics=cls.metric,
         )
         cls.loop.run_until_complete(cls.subscriber.connect())
 
@@ -142,3 +150,26 @@ class TestMarketTickSubscriber(unittest.TestCase):
             await self.subscriber.close()
 
         self._run(_test())
+
+    def test_subscribe_on_bad_data(self) -> None:
+        """Test that if the subscriber receives invalid data that cannot be parsed as a MarketTick, it logs an error and increments the parse_errors_total metric, but does not raise an exception."""
+
+        async def _test() -> None:
+            bad_tick: bytes = b'{"invalid": "message"}'
+
+            async def on_bad_tick(t: bytes) -> None:
+                nonlocal bad_tick
+                bad_tick = t
+
+            result = await self.subscriber.subscribe("market.tick.BTCUSD", on_bad_tick)
+            await self.publisher.client.publish("market.tick.BTCUSD", bad_tick)
+            await asyncio.sleep(0.1)
+            self.assertIsNone(result)
+            self.assertTrue(self.subscriber.client.is_connected)
+
+            await self.subscriber.close()
+
+        self._run(_test())
+        metric_families = list(self.metric.parse_errors_total.collect())
+        value = metric_families[0].samples[0].value
+        self.assertEqual(value, 1.0)
