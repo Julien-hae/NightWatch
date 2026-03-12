@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
-from Nightwatch.models.nats_connection import NatsConnectionConfig
+from Nightwatch.models.nats_config import NatsConnectionConfig
 from Nightwatch.nats_connection import NatsConnector
 
 LOGGER = logging.getLogger(__name__)

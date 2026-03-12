@@ -11,7 +11,7 @@ from typing import Any
 
 from Nightwatch.kraken_adapter import KrakenAdapter
 from Nightwatch.models.market_tick import MarketTick
-from Nightwatch.models.nats_connection import NatsConnectionConfig
+from Nightwatch.models.nats_config import NatsConnectionConfig
 from Nightwatch.models.tick_buffer import TickBuffer
 from Nightwatch.publisher import MarketTickPublisher
 from Nightwatch.subscriber import MarketTickSubscriber
