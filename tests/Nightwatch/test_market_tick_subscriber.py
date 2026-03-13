@@ -147,6 +147,7 @@ class TestMarketTickSubscriber(unittest.TestCase):
         """Test that if the subscriber receives invalid data that cannot be parsed as a MarketTick, it logs an error and increments the parse_errors_total metric, but does not raise an exception."""
 
         metric_families = list(self.metric.parse_errors_total.collect())
+
         old_value = metric_families[0].samples[0].value
 
         async def _test() -> None:
