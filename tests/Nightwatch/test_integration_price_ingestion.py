@@ -16,7 +16,7 @@ from nats.aio.client import Client as NatsClient
 
 from Nightwatch.kraken_adapter import KrakenAdapter
 from Nightwatch.models.market_tick import MarketTick
-from Nightwatch.models.nats_connection import NatsConnectionConfig
+from Nightwatch.models.nats_config import NatsConnectionConfig
 from Nightwatch.publisher import MarketTickPublisher
 from tests.fixtures.nats_server import NatsServerFixture
 
@@ -78,7 +78,7 @@ class TestPriceIngestionIntegration(unittest.TestCase):
 
         async def _test() -> None:
             sub_client = NatsClient()
-            await sub_client.connect(servers=[self.nats.url])
+            await sub_client.connect(servers=[self.nats.url], token=os.getenv("NATS_TOKEN", ""))
             sub = await sub_client.subscribe("market.tick.BTCUSD")
 
             tick = await self.adapter.stream_ticks().__anext__()

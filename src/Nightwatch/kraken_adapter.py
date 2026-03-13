@@ -5,10 +5,11 @@ import json
 import logging
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, AsyncIterator, Dict, Optional
+from typing import Any, AsyncIterator
 
 from websockets import connect
 from websockets.asyncio.client import ClientConnection
+from websockets.exceptions import WebSocketException
 
 from Nightwatch.exchange_market_adapter import ExchangeMarketAdapter
 from Nightwatch.metrics import NightwatchMetrics
@@ -20,18 +21,18 @@ LOGGER = logging.getLogger(__name__)
 class KrakenAdapter(ExchangeMarketAdapter):
     """Adapter to ingest live stock data from the Kraken API."""
 
-    def __init__(self, symbol: str = "BTC/USD", metrics: Optional[NightwatchMetrics] = None) -> None:
+    def __init__(self, symbol: str = "BTC/USD", uri: str = "wss://ws.kraken.com/v2", metrics: NightwatchMetrics | None = None) -> None:
         """Initialize the KrakenAdapter class."""
         super().__init__()
-        self.websocket: Optional[ClientConnection] = None
-        self.uri = "wss://ws.kraken.com/v2"
+        self.websocket: ClientConnection | None = None
+        self.uri = uri
         self.symbol = symbol
         self._metrics = metrics
 
     async def connect(self) -> None:
         """Connect to the Kraken websocket."""
         try:
-            self.websocket = await connect(self.uri, max_size=1048576)
+            self.websocket = await connect(self.uri, max_size=65536)
         except Exception as e:
             raise ConnectionError(f"Failed to connect to Kraken websocket: {e}") from e
 
@@ -48,7 +49,7 @@ class KrakenAdapter(ExchangeMarketAdapter):
         }
         await self.websocket.send(json.dumps(subscribe_message))
 
-    def parse_message(self, message: Optional[Dict[str, Any]]) -> Optional[MarketTick]:
+    def parse_message(self, message: dict[str, Any] | None) -> MarketTick | None:
         """Parse a message received from the websocket and return a MarketTick, or None for non-ticker messages."""
         if not isinstance(message, dict):
             return None
@@ -106,8 +107,12 @@ class KrakenAdapter(ExchangeMarketAdapter):
                     if self._metrics is not None:
                         self._metrics.ticks_received_total.inc()
                     yield parsed
-            except Exception as exc:
-                LOGGER.warning("WebSocket dropped or error occurred: %s. Retrying with backoff.", exc)
+            except json.JSONDecodeError as exc:
+                if self._metrics is not None:
+                    self._metrics.parse_errors_total.inc()
+                LOGGER.error("JSON decode error: %s", exc)
+            except (ConnectionError, asyncio.TimeoutError, WebSocketException) as exc:
+                LOGGER.warning("WebSocket dropped: %s. Retrying with backoff.", exc)
                 await self.close()
                 if self._metrics is not None:
                     self._metrics.ws_reconnects_total.inc()

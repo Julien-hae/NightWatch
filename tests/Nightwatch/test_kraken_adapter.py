@@ -6,7 +6,7 @@ import os
 import unittest
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, List
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 from prometheus_client import CollectorRegistry
@@ -23,9 +23,14 @@ class TestKrakenAdapter(unittest.TestCase):
         """Set up the KrakenAdapter instance for testing."""
         self.adapter = KrakenAdapter()
 
+    def test_subscribe_raises_when_not_connected(self) -> None:
+        """Test that subscribe raises a ConnectionError if connect() has not been called."""
+        with self.assertRaises(ConnectionError):
+            asyncio.run(self.adapter.subscribe())
+
     def test_parse_message(self) -> None:
         """Test the parse_message method of the KrakenAdapter class."""
-        message: Dict[str, Any] = {
+        message: dict[str, Any] = {
             "channel": "ticker",
             "type": "snapshot",
             "data": [
@@ -79,7 +84,7 @@ class TestKrakenAdapter(unittest.TestCase):
         mock_ws = AsyncMock()
         mock_connect.return_value = mock_ws
         asyncio.run(self.adapter.connect())
-        mock_connect.assert_called_once_with(self.adapter.uri, max_size=1048576)
+        mock_connect.assert_called_once_with(self.adapter.uri, max_size=65536)
         self.assertEqual(self.adapter.websocket, mock_ws)
 
     def test_subscribe(self) -> None:
@@ -103,7 +108,7 @@ class TestKrakenAdapter(unittest.TestCase):
         Note: This test requires a real internet connection and may be slow/flaky. Run sparingly.
         """
 
-        async def run_integration() -> List[str]:
+        async def run_integration() -> list[str]:
             await self.adapter.connect()
             await self.adapter.subscribe()
             if self.adapter.websocket is None:

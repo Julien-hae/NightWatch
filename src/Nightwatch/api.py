@@ -1,7 +1,7 @@
 """FastAPI application exposing health and Prometheus metrics endpoints."""
 
 from fastapi import FastAPI
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from Nightwatch.metrics import NightwatchMetrics
@@ -27,12 +27,17 @@ def create_app(
     app = FastAPI(title="NightWatch API")
 
     @app.get("/healthz")
-    def healthz() -> dict[str, bool]:
+    def healthz() -> Response:
         """Return the health status of external connections."""
-        return {
-            "ws_connected": _health.ws_connected,
-            "nats_connected": _health.nats_connected,
-        }
+        if not _health.ws_connected or not _health.nats_connected:
+            return JSONResponse(
+                content={
+                    "ws_connected": _health.ws_connected,
+                    "nats_connected": _health.nats_connected,
+                },
+                status_code=503,
+            )
+        return JSONResponse(content={"ws_connected": _health.ws_connected, "nats_connected": _health.nats_connected}, status_code=200)
 
     @app.get("/metrics")
     def prometheus_metrics() -> Response:

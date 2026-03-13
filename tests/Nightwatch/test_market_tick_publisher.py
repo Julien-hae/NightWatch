@@ -1,3 +1,4 @@
+# mypy: disable-error-code="import-untyped"
 """Integration tests for the MarketTickPublisher with a real NATS server."""
 
 import asyncio
@@ -5,19 +6,20 @@ import json
 import os
 import unittest
 from collections.abc import Coroutine
-from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
+from unittest.mock import patch
 
 from nats.aio.client import Client as NatsClient
 
 from Nightwatch.models.market_tick import MarketTick
-from Nightwatch.models.nats_connection import NatsConnectionConfig
-from Nightwatch.publisher import MarketTickPublisher
+from Nightwatch.models.nats_config import NatsConnectionConfig
+from Nightwatch.publisher import MAX_PAYLOAD_BYTES, MarketTickPublisher, PayloadTooLargeError
 from tests.fixtures.nats_server import NatsServerFixture
+from tests.fixtures.tick_factory import make_tick
 
 
-@unittest.skipUnless(os.environ.get("RUN_INTEGRATION"), "Integration tests require RUN_INTEGRATION=1")
+# @unittest.skipUnless(os.environ.get("RUN_INTEGRATION"), "Integration tests require RUN_INTEGRATION=1")
 class TestMarketTickPublisherIntegration(unittest.TestCase):
     """Integration tests that start / stop a real NATS server."""
 
@@ -61,9 +63,7 @@ class TestMarketTickPublisherIntegration(unittest.TestCase):
             pub = MarketTickPublisher(config=NatsConnectionConfig(servers=[self.nats.url]))
             await pub.connect()
 
-            tick = MarketTick(
-                timestamp=datetime.now(timezone.utc), symbol="BTC/USD", price=Decimal("42000.0"), source="Kraken", schema_version=1
-            )
+            tick = make_tick()
             subject = await pub.publish(tick)
 
             self.assertEqual(subject, "market.tick.BTCUSD")
@@ -78,14 +78,12 @@ class TestMarketTickPublisherIntegration(unittest.TestCase):
             received: list[bytes] = []
 
             sub_client = NatsClient()
-            await sub_client.connect(servers=[self.nats.url])
+            await sub_client.connect(servers=[self.nats.url], token=os.getenv("NATS_TOKEN", ""))
             sub = await sub_client.subscribe("market.tick.BTCUSD")
 
             pub = MarketTickPublisher(config=NatsConnectionConfig(servers=[self.nats.url]))
             await pub.connect()
-            tick = MarketTick(
-                timestamp=datetime.now(timezone.utc), symbol="BTC/USD", price=Decimal("42000.0"), source="Kraken", schema_version=1
-            )
+            tick = make_tick()
             await pub.publish(tick)
 
             try:
@@ -138,11 +136,26 @@ class TestMarketTickPublisherIntegration(unittest.TestCase):
             self.nats.start()
             await asyncio.wait_for(reconnected.wait(), timeout=10)
             self.assertTrue(pub.client.is_connected)
-            tick = MarketTick(
-                timestamp=datetime.now(timezone.utc), symbol="BTC/USD", price=Decimal("99000.0"), source="Kraken", schema_version=1
-            )
+            tick = make_tick()
             subject = await pub.publish(tick)
             self.assertEqual(subject, "market.tick.BTCUSD")
+
+            await pub.close()
+
+        self._run(_test())
+
+    def test_maxpayload_exceeded(self) -> None:
+        """Publishing a MarketTick with a payload that exceeds the NATS max size raises PayloadTooLargeError."""
+
+        async def _test() -> None:
+            pub = MarketTickPublisher(config=NatsConnectionConfig(servers=[self.nats.url]))
+            await pub.connect()
+
+            tick = make_tick()
+            oversized_json = "x" * (MAX_PAYLOAD_BYTES + 1)
+            with patch.object(MarketTick, "model_dump_json", lambda *_args, **_kwargs: oversized_json):
+                with self.assertRaises(PayloadTooLargeError):
+                    await pub.publish(tick)
 
             await pub.close()
 

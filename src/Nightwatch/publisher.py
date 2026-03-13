@@ -1,22 +1,22 @@
 """Defines the MarketTickPublisher class for publishing MarketTick data to a NATS server."""
 
 import logging
-from typing import Optional
 
-from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.common.utils import normalize_symbol
 from Nightwatch.models.market_tick import MarketTick
-from Nightwatch.models.nats_connection import NatsConnectionConfig, normalize_symbol
 from Nightwatch.nats_connection import NatsConnector
 
 LOGGER = logging.getLogger(__name__)
 
+MAX_PAYLOAD_BYTES = 1_048_576
+
+
+class PayloadTooLargeError(Exception):
+    """Raised when a serialized MarketTick exceeds the max allowed NATS payload size."""
+
 
 class MarketTickPublisher(NatsConnector):
     """Publisher for MarketTick data to a NATS server."""
-
-    def __init__(self, config: Optional[NatsConnectionConfig] = None, metrics: Optional[NightwatchMetrics] = None) -> None:
-        """Initialize the MarketTickPublisher with NATS connection parameters."""
-        super().__init__(config=config, metrics=metrics)
 
     @staticmethod
     def subject_for(tick: MarketTick) -> str:
@@ -31,6 +31,10 @@ class MarketTickPublisher(NatsConnector):
 
         subject = self.subject_for(tick)
         payload = tick.model_dump_json().encode("utf-8")
+
+        if len(payload) > MAX_PAYLOAD_BYTES:
+            raise PayloadTooLargeError(f"Payload size {len(payload)} bytes exceeds max {MAX_PAYLOAD_BYTES} bytes")
+
         await self.client.publish(subject, payload)
         if flush:
             await self.client.flush(timeout=5)
