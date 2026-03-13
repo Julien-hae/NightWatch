@@ -107,6 +107,10 @@ class KrakenAdapter(ExchangeMarketAdapter):
                     if self._metrics is not None:
                         self._metrics.ticks_received_total.inc()
                     yield parsed
+            except json.JSONDecodeError as exc:
+                if self._metrics is not None:
+                    self._metrics.parse_errors_total.inc()
+                LOGGER.error("JSON decode error: %s", exc)
             except (ConnectionError, asyncio.TimeoutError, WebSocketException) as exc:
                 LOGGER.warning("WebSocket dropped: %s. Retrying with backoff.", exc)
                 await self.close()

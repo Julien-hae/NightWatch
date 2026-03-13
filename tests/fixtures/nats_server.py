@@ -9,10 +9,10 @@ import time
 class NatsServerFixture:
     """Manage a temporary nats-server process for integration tests."""
 
-    def __init__(self, token: str = os.environ.get("NATS_TOKEN", "")) -> None:
+    def __init__(self, token: str | None = None) -> None:
         """Initialize the NatsServerFixture."""
         self.port: int = 0
-        self._token: str = token
+        self._token: str | None = token or os.environ.get("NATS_TOKEN", "")
         self._proc: subprocess.Popen[bytes] | None = None
 
     @property

@@ -8,7 +8,6 @@ from Nightwatch.nats_connection import NatsConnector
 
 LOGGER = logging.getLogger(__name__)
 
-# NATS default max payload is 1 MB; we use a conservative limit.
 MAX_PAYLOAD_BYTES = 1_048_576
 
 

@@ -17,12 +17,15 @@ class TickBuffer:
 
     def __post_init__(self) -> None:
         """Initialize the ticks dictionary with a default factory to create deques for each symbol."""
-        self.ticks = defaultdict(lambda: deque(maxlen=self.max_ticks_per_symbol))
+        if not self.ticks:
+            self.ticks = defaultdict(lambda: deque(maxlen=self.max_ticks_per_symbol))
+        elif not isinstance(self.ticks, defaultdict):
+            self.ticks = defaultdict(lambda: deque(maxlen=self.max_ticks_per_symbol), self.ticks)
 
     def add_tick(self, tick: MarketTick) -> None:
         """Add a tick to the per-symbol buffer, maintaining a rolling window up to max_ticks_per_symbol."""
         self.ticks[tick.symbol].append(tick)
 
     def get_ticks(self, symbol: str) -> deque[MarketTick]:
-        """Get the list of ticks for a given symbol, or an empty list if no ticks are stored for that symbol."""
+        """Get the deque of ticks for a given symbol, or an empty deque if no ticks are stored for that symbol."""
         return deque(self.ticks.get(symbol, []))

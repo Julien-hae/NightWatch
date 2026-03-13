@@ -22,7 +22,7 @@ class MarketTickRecorder:
             f.write(tick.model_dump_json() + "\n")
 
     def record_ticks(self, ticks: list[MarketTick]) -> None:
-        """Record mutliple ticks to the file in JSONL format."""
+        """Record multiple ticks to the file in JSONL format."""
         with open(self.path, "a", encoding="utf-8") as f:
             for tick in ticks:
                 f.write(tick.model_dump_json() + "\n")
