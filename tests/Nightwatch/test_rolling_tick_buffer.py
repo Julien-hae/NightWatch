@@ -114,11 +114,12 @@ class TestTickBuffer(unittest.TestCase):
 
     def test_given_buffer_of_3_when_4_ticks_added_then_oldest_evicted(self) -> None:
         """Test that when more than max_ticks_per_symbol are added, the oldest tick is evicted from the buffer."""
+        buffer = TickBuffer(max_ticks_per_symbol=3)
         for i in range(4):
             tick = make_tick(price=Decimal(str(i)), timestamp=datetime.now(timezone.utc))
-            self.buffer.add_tick(tick)
-        self.assertEqual(len(self.buffer.get_ticks("BTC/USD")), 3)
-        self.assertEqual(self.buffer.get_ticks("BTC/USD")[0].price, Decimal("1"))  # oldest evicted
+            buffer.add_tick(tick)
+        self.assertEqual(len(buffer.get_ticks("BTC/USD")), 3)
+        self.assertEqual(buffer.get_ticks("BTC/USD")[0].price, Decimal("1"))  # oldest evicted
 
     def test_given_two_symbols_when_ticks_added_then_isolated(self) -> None:
         """Test that ticks for different symbols are stored in separate buffers and do not interfere with each other."""

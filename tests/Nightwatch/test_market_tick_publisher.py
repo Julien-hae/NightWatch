@@ -77,7 +77,7 @@ class TestMarketTickPublisherIntegration(unittest.TestCase):
             received: list[bytes] = []
 
             sub_client = NatsClient()
-            await sub_client.connect(servers=[self.nats.url])
+            await sub_client.connect(servers=[self.nats.url], token=os.getenv("NATS_TOKEN", ""))
             sub = await sub_client.subscribe("market.tick.BTCUSD")
 
             pub = MarketTickPublisher(config=NatsConnectionConfig(servers=[self.nats.url]))

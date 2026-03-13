@@ -38,8 +38,9 @@ class NatsConnector:
             if on_reconnected:
                 await on_reconnected()
 
+        opts = self._config.model_dump()
         await self._nc.connect(
-            **self._config.model_dump(),
+            **opts,
             disconnected_cb=_disconnected_cb if on_disconnected else None,
             reconnected_cb=_reconnected_cb if on_reconnected else None,
         )

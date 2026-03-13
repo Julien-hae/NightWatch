@@ -1,5 +1,6 @@
 """Fixture to manage a temporary nats-server process for integration tests."""
 
+import os
 import socket
 import subprocess
 import time
@@ -8,9 +9,10 @@ import time
 class NatsServerFixture:
     """Manage a temporary nats-server process for integration tests."""
 
-    def __init__(self) -> None:
+    def __init__(self, token: str = os.environ.get("NATS_TOKEN", "")) -> None:
         """Initialize the NatsServerFixture."""
         self.port: int = 0
+        self._token: str = token
         self._proc: subprocess.Popen[bytes] | None = None
 
     @property
@@ -29,9 +31,12 @@ class NatsServerFixture:
         """Start nats-server on a random free port (or reuse the previous port on restart)."""
         if self.port == 0:
             self.port = self._free_port()
+        cmd = ["nats-server", "-p", str(self.port)]
+        if self._token:
+            cmd += ["-auth", self._token]
         try:
             self._proc = subprocess.Popen(
-                ["nats-server", "-p", str(self.port)],
+                cmd,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )

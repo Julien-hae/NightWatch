@@ -78,7 +78,7 @@ class TestPriceIngestionIntegration(unittest.TestCase):
 
         async def _test() -> None:
             sub_client = NatsClient()
-            await sub_client.connect(servers=[self.nats.url])
+            await sub_client.connect(servers=[self.nats.url], token=os.getenv("NATS_TOKEN", ""))
             sub = await sub_client.subscribe("market.tick.BTCUSD")
 
             tick = await self.adapter.stream_ticks().__anext__()
