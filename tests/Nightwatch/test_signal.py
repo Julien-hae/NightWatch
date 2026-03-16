@@ -4,7 +4,7 @@ import unittest
 import uuid
 from datetime import datetime, timezone
 
-from Nightwatch.models.signal import Signal
+from Nightwatch.models.signal import Signal  # type: ignore[import-untyped]
 from tests.fixtures.signal_factory import make_signal
 
 
@@ -44,8 +44,8 @@ class TestSignal(unittest.TestCase):
         with self.assertRaises(ValueError):
             make_signal(side="ERROR")
 
-    def test_strength_positive_or_null(self) -> None:
-        """Test that the 'strength' attribute must be positive or zero."""
+    def test_strength_non_negative(self) -> None:
+        """Test that the 'strength' attribute must be non-negative (>= 0)."""
         with self.assertRaises(ValueError):
             make_signal(strength=-1.0)
 
@@ -65,7 +65,7 @@ class TestSignal(unittest.TestCase):
         self.assertEqual(deserialized_signal.schema_version, self.signal.schema_version)
 
     def test_json_integration(self) -> None:
-        """Test that a Signal can be created from a JSON-like dictionary."""
+        """Test that a Signal can be created from a Python dictionary payload."""
         json_data = {
             "symbol": "BTCUSD",
             "timestamp": datetime.now(timezone.utc),
@@ -94,7 +94,7 @@ class TestSignal(unittest.TestCase):
     def test_missing_fields(self) -> None:
         """Test that missing required fields raise a validation error."""
         with self.assertRaises(ValueError):
-            Signal(  # type: ignore[call-arg]
+            Signal(
                 timestamp=datetime.now(timezone.utc),
                 side="BUY",
                 strategy="momentum_burst_v1",

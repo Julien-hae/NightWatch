@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from typing import Any
 
-from Nightwatch.models.signal import Signal
+from Nightwatch.models.signal import Signal  # type: ignore[import-untyped]
 
 
 def make_signal(
@@ -11,7 +11,7 @@ def make_signal(
     side: str = "BUY",
     strength: float = 0.8,
     strategy: str = "Mean Reversion",
-    rationale: dict[str, float] = {"delta_pct": 0.05, "window_sec": 3.0, "threshold_pct": 0.02},
+    rationale: dict[str, float] | None = None,
     source: str = "test",
     **kwargs: Any,
 ) -> Signal:
@@ -22,7 +22,7 @@ def make_signal(
         side=side,
         strength=strength,
         strategy=strategy,
-        rationale=rationale,
+        rationale=rationale or {"delta_pct": 0.05, "window_sec": 3.0, "threshold_pct": 0.02},
         source=source,
         schema_version=kwargs.pop("schema_version", 1),
         **kwargs,
