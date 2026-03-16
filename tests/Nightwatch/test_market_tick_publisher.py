@@ -19,7 +19,7 @@ from tests.fixtures.nats_server import NatsServerFixture
 from tests.fixtures.tick_factory import make_tick
 
 
-# @unittest.skipUnless(os.environ.get("RUN_INTEGRATION"), "Integration tests require RUN_INTEGRATION=1")
+@unittest.skipUnless(os.environ.get("RUN_INTEGRATION"), "Integration tests require RUN_INTEGRATION=1")
 class TestMarketTickPublisherIntegration(unittest.TestCase):
     """Integration tests that start / stop a real NATS server."""
 

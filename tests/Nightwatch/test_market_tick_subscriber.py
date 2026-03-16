@@ -146,7 +146,9 @@ class TestMarketTickSubscriber(unittest.TestCase):
     def test_subscribe_on_bad_data(self) -> None:
         """Test that if the subscriber receives invalid data that cannot be parsed as a MarketTick, it logs an error and increments the parse_errors_total metric, but does not raise an exception."""
 
-        old_value = self.metric.parse_errors_total._value.get()
+        metric_families = list(self.metric.parse_errors_total.collect())
+
+        old_value = metric_families[0].samples[0].value
 
         async def _test() -> None:
             bad_tick: bytes = b'{"invalid": "message"}'
@@ -155,7 +157,7 @@ class TestMarketTickSubscriber(unittest.TestCase):
                 nonlocal bad_tick
                 bad_tick = t
 
-            await self.subscriber.subscribe("market.tick.BTCUSD", on_bad_tick)  # type: ignore[arg-type]
+            await self.subscriber.subscribe("market.tick.BTCUSD", on_bad_tick)
             await self.publisher.client.publish("market.tick.BTCUSD", bad_tick)
             await asyncio.sleep(0.1)
             self.assertTrue(self.subscriber.client.is_connected)
