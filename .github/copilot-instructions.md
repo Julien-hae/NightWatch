@@ -118,7 +118,7 @@ temporary `nats-server` process on a random port.
 
 ## CI Pipeline (`.github/workflows/ci.yml`)
 
-Two jobs run on every push/PR:
+The CI pipeline has two jobs:
 
 | Job | Trigger | Steps |
 |-----|---------|-------|
