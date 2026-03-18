@@ -1,6 +1,7 @@
 """Defines the TickBuffer Pydantic model for storing the last N MarketTick objects per symbol in a rolling buffer."""
 
 from collections import defaultdict, deque
+from datetime import datetime, timedelta, timezone
 
 from pydantic import ConfigDict, Field
 from pydantic.dataclasses import dataclass
@@ -29,3 +30,8 @@ class TickBuffer:
     def get_ticks(self, symbol: str) -> deque[MarketTick]:
         """Get the deque of ticks for a given symbol, or an empty deque if no ticks are stored for that symbol."""
         return deque(self.ticks.get(symbol, []))
+
+    def get_ticks_within(self, symbol: str, seconds: float) -> deque[MarketTick]:
+        """Return ticks for *symbol* that fall within the last *seconds* seconds."""
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=seconds)
+        return deque(t for t in self.ticks.get(symbol, []) if t.timestamp >= cutoff)
