@@ -3,8 +3,8 @@
 import unittest
 from collections import deque
 
-from Nightwatch.models.market_tick import MarketTick  # type: ignore[import-untyped]
-from Nightwatch.strategy import Strategy  # type: ignore[import-untyped]
+from Nightwatch.models.market_tick import MarketTick
+from Nightwatch.strategies.strategy import Strategy
 from tests.fixtures.test_strategy import NoneStrategy
 
 
@@ -14,7 +14,7 @@ class TestStrategy(unittest.TestCase):
     def test_cannot_instantiate_directly(self) -> None:
         """Given Strategy is abstract, When instantiated, Then TypeError."""
         with self.assertRaises(TypeError):
-            Strategy()
+            Strategy()  # type: ignore[abstract]
 
     def test_on_tick_returns_none(self) -> None:
         """Given a concrete implementation of Strategy, When on_tick is called, Then it returns None."""
