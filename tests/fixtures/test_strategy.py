@@ -5,10 +5,10 @@ from collections import deque
 
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.signal import Signal
-from Nightwatch.strategy import Strategy
+from Nightwatch.strategies.strategy import Strategy
 
 
-class NoneStrategy(Strategy):  # type: ignore[misc]
+class NoneStrategy(Strategy):
     """A concrete implementation of the Strategy class for testing purposes."""
 
     def __init__(self) -> None:
