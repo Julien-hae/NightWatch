@@ -31,6 +31,16 @@ class TickBuffer:
         """Get the deque of ticks for a given symbol, or an empty deque if no ticks are stored for that symbol."""
         return deque(self.ticks.get(symbol, []))
 
+    def get_latest_tick(self, symbol: str) -> MarketTick | None:
+        """Return the most recent tick for *symbol*, or None if no ticks are available."""
+        ticks = self.get_ticks(symbol)
+        return ticks[-1] if ticks else None
+
+    def get_first_tick(self, symbol: str) -> MarketTick | None:
+        """Return the oldest tick for *symbol*, or None if no ticks are available."""
+        ticks = self.get_ticks(symbol)
+        return ticks[0] if ticks else None
+
     def get_ticks_within(self, symbol: str, seconds: float) -> deque[MarketTick]:
         """Return ticks for *symbol* that fall within the last *seconds* seconds."""
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=seconds)
