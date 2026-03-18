@@ -2,7 +2,7 @@
 
 import unittest
 from collections import deque
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from Nightwatch.strategies.momentum_burst import MomentumBurstStrategy
@@ -15,9 +15,9 @@ class TestMomentumBurstStrategy(unittest.TestCase):
     def setUp(self) -> None:
         """Set up the test case with an instance of MomentumBurstStrategy."""
         self.strategy = MomentumBurstStrategy(window_sec=10.0, threshold_pct=10)
-        self.start_time = datetime(2026, 1, 1, 10, 0, 0)
+        self.start_time = datetime(2026, 1, 1, 10, 0, 0, tzinfo=timezone.utc)
 
-    def test_rising_seq_corsses_threshold(self) -> None:
+    def test_rising_seq_crosses_threshold(self) -> None:
         """Test that a rising sequence of ticks crossing the threshold generates a buy signal."""
 
         ticks = deque(
@@ -31,8 +31,8 @@ class TestMomentumBurstStrategy(unittest.TestCase):
         self.assertIsNotNone(signal)
         self.assertEqual(signal.side, "BUY")  # type: ignore[union-attr]
 
-    def test_failing_seq_corsses_threshold(self) -> None:
-        """Test that a failing sequence of ticks crossing the threshold generates a sell signal."""
+    def test_falling_seq_crosses_threshold(self) -> None:
+        """Test that a falling sequence of ticks crossing the threshold generates a sell signal."""
 
         ticks = deque(
             [
@@ -45,8 +45,8 @@ class TestMomentumBurstStrategy(unittest.TestCase):
         self.assertIsNotNone(signal)
         self.assertEqual(signal.side, "SELL")  # type: ignore[union-attr]
 
-    def test_noise_under_tresholds(self) -> None:
-        """Test that noisy sequences outside thresholds generate a None signal"""
+    def test_noise_under_thresholds(self) -> None:
+        """Test that noisy sequences outside thresholds generate a None signal."""
 
         ticks = deque(
             [
@@ -58,8 +58,8 @@ class TestMomentumBurstStrategy(unittest.TestCase):
         signal = self.strategy.on_tick(ticks[-1].symbol, ticks)
         self.assertIsNone(signal)
 
-    def test_enough_tick_in_window(self) -> None:
-        """Test that sequences with not enough ticks in the window generate a None signal"""
+    def test_not_enough_ticks_in_window(self) -> None:
+        """Test that sequences with not enough ticks in the window generate a None signal."""
 
         ticks = deque(
             [
@@ -70,12 +70,12 @@ class TestMomentumBurstStrategy(unittest.TestCase):
         self.assertIsNone(signal)
 
     def test_no_ticks_in_window(self) -> None:
-        """Test that an empty window generates a None signal"""
+        """Test that an empty window generates a None signal."""
         signal = self.strategy.on_tick("TEST", deque())
         self.assertIsNone(signal)
 
     def test_start_price_is_zero(self) -> None:
-        """Test that a sequence starting with a price of zero generates a None signal"""
+        """Test that a sequence starting with a price of zero generates a None signal."""
         ticks = deque(
             [
                 make_tick(price=Decimal("0"), timestamp=self.start_time),
@@ -107,6 +107,19 @@ class TestMomentumBurstStrategy(unittest.TestCase):
                 make_tick(price=Decimal("100"), timestamp=self.start_time),
                 make_tick(price=Decimal("105"), timestamp=self.start_time + timedelta(seconds=5)),
                 make_tick(price=Decimal("109.99"), timestamp=self.start_time + timedelta(seconds=10)),
+            ]
+        )
+        signal = self.strategy.on_tick(ticks[-1].symbol, ticks)
+        self.assertIsNone(signal)
+
+    def test_within_time_window(self) -> None:
+        """Test that a sequence with ticks outside the time window generates a None signal."""
+
+        ticks = deque(
+            [
+                make_tick(price=Decimal("100"), timestamp=self.start_time),
+                make_tick(price=Decimal("105"), timestamp=self.start_time + timedelta(seconds=15)),
+                make_tick(price=Decimal("115"), timestamp=self.start_time + timedelta(seconds=20)),
             ]
         )
         signal = self.strategy.on_tick(ticks[-1].symbol, ticks)

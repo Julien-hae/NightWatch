@@ -1,7 +1,8 @@
-"""A trading strategy that generates buy signals when a rising sequence of ticks crosses a certain threshold."""
+"""A trading strategy that generates BUY or SELL signals when price moves beyond a configured percentage threshold."""
 
 import logging
 from collections import deque
+from datetime import timedelta
 from decimal import Decimal
 
 from Nightwatch.models.market_tick import MarketTick
@@ -12,7 +13,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class MomentumBurstStrategy(Strategy):
-    """A trading strategy that generates buy signals when a rising sequence of ticks crosses a certain threshold."""
+    """A trading strategy that generates BUY or SELL signals when price moves beyond a configured percentage threshold."""
 
     def __init__(self, window_sec: float = 10.0, threshold_pct: float = 30) -> None:
         """Initializes the MomentumBurstStrategy with the specified window size and threshold percentage."""
@@ -20,7 +21,7 @@ class MomentumBurstStrategy(Strategy):
         self.threshold_pct = threshold_pct
 
     def on_tick(self, symbol: str, window: deque[MarketTick]) -> Signal | None:
-        """Generates a buy signal if the price has been rising and crosses a certain threshold.
+        """Generates a BUY or SELL signal if the price has been rising or falling and crosses a certain threshold.
 
         Args:
             symbol (str): The symbol for which the market tick is received.
@@ -35,8 +36,18 @@ class MomentumBurstStrategy(Strategy):
             )
             return None
 
-        start_tick: MarketTick = window[0]
         last_tick: MarketTick = window[-1]
+        cutoff_timestamp = last_tick.timestamp - timedelta(seconds=self.window_sec)
+        window_in_range = [tick for tick in window if tick.timestamp >= cutoff_timestamp]
+        if len(window_in_range) < 2:  # noqa: PLR2004
+            LOGGER.debug(
+                "Not enough ticks within the last %s seconds to evaluate the strategy for symbol %s. Required: 2, Found: %d",
+                self.window_sec,
+                symbol,
+                len(window_in_range),
+            )
+            return None
+        start_tick: MarketTick = window_in_range[0]
 
         if start_tick.price == Decimal("0"):
             LOGGER.warning("Start tick price is zero for symbol %s, cannot calculate percentage change.", symbol)
