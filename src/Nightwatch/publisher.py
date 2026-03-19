@@ -23,13 +23,13 @@ class MarketTickPublisher(NatsConnector):
         """Return the NATS subject for a given MarketTick."""
         return f"market.tick.{normalize_symbol(tick.symbol)}"
 
-    async def publish(self, tick: MarketTick, *, flush: bool = True) -> str:
+    async def publish(self, tick: MarketTick, *, flush: bool = True, subject: str | None = None) -> str:
         """Publish a MarketTick to the appropriate subject. Returns the subject used."""
         if not self.client.is_connected:
             LOGGER.warning("NATS publisher is not connected. Calling connect(),")
             await self.connect()
 
-        subject = self.subject_for(tick)
+        subject = subject or self.subject_for(tick)
         payload = tick.model_dump_json().encode("utf-8")
 
         if len(payload) > MAX_PAYLOAD_BYTES:

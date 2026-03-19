@@ -12,6 +12,7 @@ from Nightwatch.kraken_adapter import KrakenAdapter
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.nats_config import NatsConnectionConfig
+from Nightwatch.models.signal import Signal
 from Nightwatch.models.tick_buffer import TickBuffer
 from Nightwatch.publisher import MarketTickPublisher
 from Nightwatch.strategies.momentum_burst import MomentumBurstStrategy
@@ -73,8 +74,8 @@ class TestSignalsTotalViaNats(unittest.TestCase):
         """Run *coro* on the shared class-level event loop."""
         return self.loop.run_until_complete(coro)
 
-    def test_signals_total_increases_after_ingesting_real_ticks(self) -> None:
-        """Ingest live Kraken ticks via NATS for 30 s and verify signals_total increases."""
+    def test_counter_increases_after_ingesting_real_ticks(self) -> None:
+        """Ingest live Kraken ticks via NATS for 30 s and verify counters increase."""
         symbol = "BTC/USD"
 
         before = (self.runner.get_signal_totals(symbol=symbol, side="BUY", strategy="momentum_burst_v1") or 0.0) + (
@@ -125,3 +126,37 @@ class TestSignalsTotalViaNats(unittest.TestCase):
         self.assertGreater(
             signal_suppressed_after, signal_suppressed_before, "signal_suppressed_total should have increased after 30 s of live ticks"
         )
+
+    def test_publish_live_signal_to_nats(self) -> None:
+        """Ingest live Kraken ticks via NATS for 30 s and verify signals are published."""
+        subject = "signal.momentum_burst_v1.BTCUSD"
+
+        async def _test() -> None:
+            received_signals = []
+
+            async def _on_tick(tick: MarketTick) -> None:
+                signal = self.runner.on_market_tick(tick)
+                if signal:
+                    received_signals.append(signal)
+
+            await self.subscriber.subscribe(subject=subject, cb=_on_tick)
+
+            deadline = time.monotonic() + 30
+            try:
+                async for tick in self.adapter.stream_ticks():
+                    if time.monotonic() >= deadline:
+                        break
+                    await self.publisher.publish(tick, flush=False, subject=subject)
+            except asyncio.TimeoutError:
+                pass
+
+            # Flush remaining messages and give subscriber time to process.
+            await self.publisher.client.flush()
+            await asyncio.sleep(0.5)
+
+            self.assertGreater(len(received_signals), 0, "Should have received at least one signal from live ticks")
+            signal: Signal = received_signals[0]
+            self.assertEqual(signal.strategy, "momentum_burst_v1", "Received signal should be from the momentum_burst_v1 strategy")
+            self.assertEqual(signal.symbol, "BTC/USD", "Received signal should be for the BTC/USD symbol")
+
+        self._run(_test())
