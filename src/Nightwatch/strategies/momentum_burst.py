@@ -56,6 +56,10 @@ class MomentumBurstStrategy(Strategy):
             return None
 
         delta_pct = (last_tick.price - start_tick.price) / start_tick.price * 100
+
+        if self._metric:
+            self._metric.strategy_evaluations_total.labels(symbol=symbol, strategy="momentum_burst_v1").inc()
+
         if delta_pct >= Decimal(str(self.threshold_pct)):
             side = "BUY"
         elif delta_pct <= Decimal(str(-self.threshold_pct)):
@@ -63,9 +67,6 @@ class MomentumBurstStrategy(Strategy):
         else:
             LOGGER.debug("Delta percentage %s for symbol %s did not cross any threshold.", delta_pct, symbol)
             return None
-
-        if self._metric:
-            self._metric.strategy_evaluations_total.labels(symbol=symbol, strategy="momentum_burst_v1").inc()
 
         return Signal(
             timestamp=last_tick.timestamp,
