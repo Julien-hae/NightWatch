@@ -19,7 +19,7 @@ class StrategyRunner:
     def __init__(
         self, strategy: Strategy, buffer: TickBuffer, cooldown: timedelta = timedelta(seconds=0), metric: NightwatchMetrics | None = None
     ) -> None:
-        """Manages the execution of a trading strategy, including buffering ticks and enforcing cooldowns."""
+        """Initializes the StrategyRunner with the given strategy, tick buffer, cooldown period, and optional metrics."""
         self._cooldown = cooldown
         self._strategy = strategy
         self._buffer = buffer
