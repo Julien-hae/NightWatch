@@ -30,9 +30,13 @@ class StrategyRunner:
         first_tick = self._buffer.get_first_tick(tick.symbol)
         self._buffer.add_tick(tick)
         if not first_tick:
+            if self._metric:
+                self._metric.signals_suppressed_total.labels(reason="first_tick").inc()
             LOGGER.warning("Received first tick for symbol %s: %s", tick.symbol, tick)
             return None
         if self._last_signal_time is not None and tick.timestamp - self._last_signal_time <= self._cooldown:
+            if self._metric:
+                self._metric.signals_suppressed_total.labels(reason="cooldown").inc()
             LOGGER.warning("Tick for symbol %s received during cooldown period: %s", tick.symbol, tick)
             return None
 
@@ -51,11 +55,17 @@ class StrategyRunner:
             LOGGER.debug(log)
             self._last_signal_time = tick.timestamp
             if self._metric:
-                self._metric.signals_total.labels(symbol=tick.symbol, side=signal.side).inc()
+                self._metric.signals_total.labels(symbol=tick.symbol, side=signal.side, strategy=signal.strategy).inc()
         return signal
 
     def get_signal_totals(self, **labels: str) -> float | None:
         """Return the total number of signals emitted by the strategy."""
         if self._metric:
             return self._metric.get_counter_value(self._metric.signals_total, **labels)
+        return None
+
+    def get_suppressed_signal_totals(self, **labels: str) -> float | None:
+        """Return the total number of signals suppressed by the strategy."""
+        if self._metric:
+            return self._metric.get_counter_value(self._metric.signals_suppressed_total, **labels)
         return None

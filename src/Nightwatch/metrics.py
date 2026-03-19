@@ -53,7 +53,19 @@ class NightwatchMetrics:
         self.signals_total = Counter(
             "signals_total",
             "Total number of trading signals emitted by the strategy",
-            labelnames=["symbol", "side"],
+            labelnames=["symbol", "side", "strategy"],
+            registry=self.registry,
+        )
+        self.strategy_evaluations_total = Counter(
+            "strategy_evaluations_total",
+            "Total number of strategy evaluations performed",
+            labelnames=["symbol", "strategy"],
+            registry=self.registry,
+        )
+        self.signals_suppressed_total = Counter(
+            "signals_suppressed_total",
+            "Total number of signals suppressed due to 'reason'",
+            labelnames=["reason"],
             registry=self.registry,
         )
 

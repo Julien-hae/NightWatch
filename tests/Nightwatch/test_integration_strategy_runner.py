@@ -31,6 +31,8 @@ class TestSignalsTotalViaNats(unittest.TestCase):
     subscriber: MarketTickSubscriber
     runner: StrategyRunner
     metrics: NightwatchMetrics
+    strategy: MomentumBurstStrategy
+    buffer: TickBuffer
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -50,11 +52,11 @@ class TestSignalsTotalViaNats(unittest.TestCase):
         cls.subscriber = MarketTickSubscriber(config=nats_cfg, metrics=cls.metrics)
         cls.loop.run_until_complete(cls.subscriber.connect())
 
-        strategy = MomentumBurstStrategy(threshold_pct=0.01)
-        buffer = TickBuffer(max_ticks_per_symbol=30)
+        cls.strategy = MomentumBurstStrategy(threshold_pct=0.01, metric=cls.metrics)
+        cls.buffer = TickBuffer(max_ticks_per_symbol=30)
         cls.runner = StrategyRunner(
-            strategy=strategy,
-            buffer=buffer,
+            strategy=cls.strategy,
+            buffer=cls.buffer,
             cooldown=timedelta(seconds=1),
             metric=cls.metrics,
         )
@@ -75,9 +77,11 @@ class TestSignalsTotalViaNats(unittest.TestCase):
         """Ingest live Kraken ticks via NATS for 30 s and verify signals_total increases."""
         symbol = "BTC/USD"
 
-        before = (self.runner.get_signal_totals(symbol=symbol, side="BUY") or 0.0) + (
-            self.runner.get_signal_totals(symbol=symbol, side="SELL") or 0.0
+        before = (self.runner.get_signal_totals(symbol=symbol, side="BUY", strategy="momentum_burst_v1") or 0.0) + (
+            self.runner.get_signal_totals(symbol=symbol, side="SELL", strategy="momentum_burst_v1") or 0.0
         )
+        strategy_evaluations_before = self.strategy.get_strategy_evaluations_total(symbol=symbol, strategy="momentum_burst_v1") or 0.0
+        signal_suppressed_before = self.runner.get_suppressed_signal_totals(reason="first_tick") or 0.0
 
         async def _test() -> None:
             async def _on_tick(tick: MarketTick) -> None:
@@ -100,10 +104,11 @@ class TestSignalsTotalViaNats(unittest.TestCase):
 
         self._run(_test())
 
-        after = (self.runner.get_signal_totals(symbol=symbol, side="BUY") or 0.0) + (
-            self.runner.get_signal_totals(symbol=symbol, side="SELL") or 0.0
+        after = (self.runner.get_signal_totals(symbol=symbol, side="BUY", strategy="momentum_burst_v1") or 0.0) + (
+            self.runner.get_signal_totals(symbol=symbol, side="SELL", strategy="momentum_burst_v1") or 0.0
         )
-
+        strategy_evaluations_after = self.strategy.get_strategy_evaluations_total(symbol=symbol, strategy="momentum_burst_v1") or 0.0
+        signal_suppressed_after = self.runner.get_suppressed_signal_totals(reason="first_tick") or 0.0
         ticks_consumed = self.metrics.get_counter_value(
             self.metrics.ticks_consumed_total,
             symbol=symbol,
@@ -112,3 +117,11 @@ class TestSignalsTotalViaNats(unittest.TestCase):
             ticks_consumed = 0.0
         self.assertGreater(ticks_consumed, 0.0, "Subscriber should have consumed at least one tick")
         self.assertGreater(after, before, "signals_total should have increased after 30 s of live ticks")
+        self.assertGreater(
+            strategy_evaluations_after,
+            strategy_evaluations_before,
+            "strategy_evaluations_total should have increased after 30 s of live ticks",
+        )
+        self.assertGreater(
+            signal_suppressed_after, signal_suppressed_before, "signal_suppressed_total should have increased after 30 s of live ticks"
+        )
