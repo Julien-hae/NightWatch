@@ -119,7 +119,7 @@ class TestStrategyRunner(unittest.TestCase):
         self.assertIsNotNone(signal)
         self.assertEqual(signal.side, "BUY")  # type: ignore[union-attr]
 
-    def test_logging_contain_required_fields(self) -> None:
+    def test_logging_contains_required_fields(self) -> None:
         """Test that the logs contain the required fields when emitting signals."""
         with self.assertLogs("Nightwatch.strategy_runner", level="DEBUG") as log:
             ticks = deque(
