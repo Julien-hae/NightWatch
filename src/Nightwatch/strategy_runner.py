@@ -33,13 +33,13 @@ class StrategyRunner:
         if not first_tick:
             if self._metric:
                 self._metric.signals_suppressed_total.labels(reason="first_tick").inc()
-            LOGGER.warning("Received first tick for symbol %s: %s", tick.symbol, tick)
+            LOGGER.info("Received first tick for symbol %s: %s", tick.symbol, tick)
             return None
         last_signal = self._last_signal_time.get(tick.symbol, None)
         if last_signal is not None and tick.timestamp - last_signal <= self._cooldown:
             if self._metric:
                 self._metric.signals_suppressed_total.labels(reason="cooldown").inc()
-            LOGGER.warning("Tick for symbol %s received during cooldown period: %s", tick.symbol, tick)
+            LOGGER.debug("Tick for symbol %s received during cooldown period: %s", tick.symbol, tick)
             return None
 
         signal = self._strategy.on_tick(symbol=tick.symbol, window=self._buffer.get_ticks(tick.symbol))
@@ -54,7 +54,7 @@ class StrategyRunner:
                 "window_sec": signal.rationale.get("window_sec", None),
                 "threshold_pct": signal.rationale.get("threshold_pct", None),
             }
-            LOGGER.debug(json.dumps(log, default=str))
+            LOGGER.info(json.dumps(log, default=str))
             self._last_signal_time[tick.symbol] = tick.timestamp
             if self._metric:
                 self._metric.signals_total.labels(symbol=tick.symbol, side=signal.side, strategy=signal.strategy).inc()
