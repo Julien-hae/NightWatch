@@ -16,7 +16,7 @@ LOGGER = logging.getLogger(__name__)
 class MomentumBurstStrategy(Strategy):
     """A trading strategy that generates BUY or SELL signals when price moves beyond a configured percentage threshold."""
 
-    def __init__(self, window_sec: float = 10.0, threshold_pct: float = 30, metric: NightwatchMetrics | None = None) -> None:
+    def __init__(self, window_sec: float = 10.0, threshold_pct: float = 0.30, metric: NightwatchMetrics | None = None) -> None:
         """Initializes the MomentumBurstStrategy with the specified window size and threshold percentage."""
         self.window_sec = window_sec
         self.threshold_pct = threshold_pct
