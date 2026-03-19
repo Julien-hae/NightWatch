@@ -57,27 +57,53 @@ class TestStrategyRunner(unittest.TestCase):
 
     def test_cooldown_prevents_signal(self) -> None:
         """Test that the cooldown period prevents emitting signals too frequently."""
-        signal = None
-        i = 0
+        # Configure a strategy where a second signal *would* be emitted without cooldown.
+        # Use a long window and low threshold so the price increase continues to trigger signals.
+        strategy_no_cd = MomentumBurstStrategy(threshold_pct=1, window_sec=60)
+        buffer_no_cd = TickBuffer(max_ticks_per_symbol=30)
+        runner_no_cd = StrategyRunner(strategy=strategy_no_cd, buffer=buffer_no_cd, cooldown=0)
+
         ticks = deque(
             [
                 make_tick(price=Decimal("100"), timestamp=self.start_time),
                 make_tick(price=Decimal("105"), timestamp=self.start_time + timedelta(seconds=5)),
                 make_tick(price=Decimal("115"), timestamp=self.start_time + timedelta(seconds=10)),
-                make_tick(price=Decimal("120"), timestamp=self.start_time + timedelta(seconds=15)),
             ]
         )
+
+        # First, verify that without cooldown we get an initial signal...
+        signal = None
+        i = 0
         while signal is None and i < len(ticks):
             tick = ticks[i]
-            signal = self.runner.on_market_tick(tick)
+            signal = runner_no_cd.on_market_tick(tick)
             i += 1
         self.assertIsNotNone(signal)
         self.assertEqual(signal.side, "BUY")  # type: ignore[union-attr]
 
-        # Now we are in cooldown, the next tick should not generate a signal
-        next_tick = make_tick(price=Decimal("125"), timestamp=self.start_time + timedelta(seconds=20))
-        signal = self.runner.on_market_tick(next_tick)
-        self.assertIsNone(signal)
+        # ...and that a later tick would trigger another signal if cooldown were not applied.
+        next_tick = make_tick(price=Decimal("130"), timestamp=self.start_time + timedelta(seconds=20))
+        second_signal_no_cd = runner_no_cd.on_market_tick(next_tick)
+        self.assertIsNotNone(second_signal_no_cd)
+        self.assertEqual(second_signal_no_cd.side, "BUY")  # type: ignore[union-attr]
+
+        # Now create a runner with cooldown enabled using the same strategy configuration.
+        strategy_cd = MomentumBurstStrategy(threshold_pct=1, window_sec=60)
+        buffer_cd = TickBuffer(max_ticks_per_symbol=30)
+        runner_cd = StrategyRunner(strategy=strategy_cd, buffer=buffer_cd, cooldown=10)
+
+        signal = None
+        i = 0
+        while signal is None and i < len(ticks):
+            tick = ticks[i]
+            signal = runner_cd.on_market_tick(tick)
+            i += 1
+        self.assertIsNotNone(signal)
+        self.assertEqual(signal.side, "BUY")  # type: ignore[union-attr]
+
+        # With cooldown active, the same later tick should now be suppressed.
+        signal_during_cooldown = runner_cd.on_market_tick(next_tick)
+        self.assertIsNone(signal_during_cooldown)
 
     def test_integration_with_momentum_burst_strategy(self) -> None:
         """Test that the StrategyRunner correctly integrates with the MomentumBurstStrategy."""
