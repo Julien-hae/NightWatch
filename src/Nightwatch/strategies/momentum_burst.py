@@ -32,6 +32,9 @@ class MomentumBurstStrategy(Strategy):
         Returns:
             Signal | None: A buy signal if the conditions are met, otherwise None.
         """
+        if self._metric:
+            self._metric.strategy_evaluations_total.labels(symbol=symbol, strategy="momentum_burst_v1").inc()
+
         if len(window) < 2:  # noqa: PLR2004
             LOGGER.debug(
                 "Not enough ticks in the window to evaluate the strategy for symbol %s. Required: 2, Found: %d", symbol, len(window)
@@ -56,9 +59,6 @@ class MomentumBurstStrategy(Strategy):
             return None
 
         delta_pct = (last_tick.price - start_tick.price) / start_tick.price * 100
-
-        if self._metric:
-            self._metric.strategy_evaluations_total.labels(symbol=symbol, strategy="momentum_burst_v1").inc()
 
         if delta_pct >= Decimal(str(self.threshold_pct)):
             side = "BUY"
