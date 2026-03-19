@@ -1,5 +1,6 @@
 """Module responsible for running a trading strategy, including buffering market ticks and enforcing cooldown periods between signals."""
 
+import json
 import logging
 from datetime import datetime, timedelta
 
@@ -44,7 +45,7 @@ class StrategyRunner:
         if signal:
             log = {
                 "event": "signal",
-                "signal_id": signal.uid,
+                "signal_id": str(signal.uid),
                 "symbol": tick.symbol,
                 "side": signal.side,
                 "strategy": signal.strategy,
@@ -52,7 +53,7 @@ class StrategyRunner:
                 "window_sec": signal.rationale.get("window_sec", None),
                 "threshold_pct": signal.rationale.get("threshold_pct", None),
             }
-            LOGGER.debug(log)
+            LOGGER.debug(json.dumps(log, default=str))
             self._last_signal_time = tick.timestamp
             if self._metric:
                 self._metric.signals_total.labels(symbol=tick.symbol, side=signal.side, strategy=signal.strategy).inc()
