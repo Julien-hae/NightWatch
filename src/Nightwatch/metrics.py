@@ -19,6 +19,7 @@ class NightwatchMetrics:
     ws_reconnects_total: Counter = field(init=False)
     ticks_published_total: Counter = field(init=False)
     ticks_consumed_total: Counter = field(init=False)
+    signals_total: Counter = field(init=False)
 
     def __post_init__(self) -> None:
         """Create Prometheus counters bound to the instance registry."""
@@ -49,3 +50,32 @@ class NightwatchMetrics:
             "Total number of WebSocket reconnections",
             registry=self.registry,
         )
+        self.signals_total = Counter(
+            "signals_total",
+            "Total number of trading signals emitted by the strategy",
+            labelnames=["symbol", "side"],
+            registry=self.registry,
+        )
+
+    def get_counter_value(self, counter: Counter, **labels: str) -> float | None:
+        """Return the current value of a counter for the given label combination.
+
+        Args:
+            counter: The Counter instance to read from.
+            **labels: Label name/value pairs (e.g. symbol="XBTUSD", side="BUY").
+
+        Returns:
+            The current float value of the counter for the specified labels,
+            or None if no observations have been recorded yet.
+        """
+        for metric in counter.collect():
+            for sample in metric.samples:
+                sample_labels = getattr(sample, "labels", None)
+                if sample_labels is None:
+                    sample_labels = sample[1]
+                if sample_labels == labels:
+                    sample_value = getattr(sample, "value", None)
+                    if sample_value is None:
+                        sample_value = sample[2]
+                    return float(sample_value)
+        return None
