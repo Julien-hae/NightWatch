@@ -5,6 +5,7 @@ import os
 import time
 import unittest
 from collections.abc import Coroutine
+from datetime import timedelta
 from typing import Any
 
 from Nightwatch.kraken_adapter import KrakenAdapter
@@ -54,7 +55,7 @@ class TestSignalsTotalViaNats(unittest.TestCase):
         cls.runner = StrategyRunner(
             strategy=strategy,
             buffer=buffer,
-            cooldown=1,
+            cooldown=timedelta(seconds=1),
             metric=cls.metrics,
         )
 
@@ -79,7 +80,6 @@ class TestSignalsTotalViaNats(unittest.TestCase):
         )
 
         async def _test() -> None:
-
             async def _on_tick(tick: MarketTick) -> None:
                 self.runner.on_market_tick(tick)
 
@@ -108,5 +108,7 @@ class TestSignalsTotalViaNats(unittest.TestCase):
             self.metrics.ticks_consumed_total,
             symbol=symbol,
         )
+        if ticks_consumed is None:
+            ticks_consumed = 0.0
         self.assertGreater(ticks_consumed, 0.0, "Subscriber should have consumed at least one tick")
         self.assertGreater(after, before, "signals_total should have increased after 30 s of live ticks")

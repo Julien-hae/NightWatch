@@ -1,7 +1,7 @@
 """Module responsible for running a trading strategy, including buffering market ticks and enforcing cooldown periods between signals."""
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
@@ -16,13 +16,14 @@ class StrategyRunner:
     """Manages the execution of a trading strategy, including buffering ticks and enforcing cooldowns."""
 
     def __init__(
-        self, strategy: Strategy, buffer: TickBuffer, cooldown: int | None = None, metric: NightwatchMetrics | None = None
+        self, strategy: Strategy, buffer: TickBuffer, cooldown: timedelta = timedelta(seconds=0), metric: NightwatchMetrics | None = None
     ) -> None:
         """Manages the execution of a trading strategy, including buffering ticks and enforcing cooldowns."""
         self._cooldown = cooldown
         self._strategy = strategy
         self._buffer = buffer
         self._metric = metric
+        self._last_signal_time: datetime | None = None
 
     def on_market_tick(self, tick: MarketTick) -> Signal | None:
         """Process a market tick and determine if a trading signal should be emitted."""
@@ -31,13 +32,14 @@ class StrategyRunner:
         if not first_tick:
             LOGGER.debug("Received first tick for symbol %s: %s", tick.symbol, tick)
             return None
-        if tick.timestamp - first_tick.timestamp < timedelta(seconds=self._cooldown):  # type: ignore[arg-type]
+        if self._last_signal_time is not None and tick.timestamp - self._last_signal_time <= self._cooldown:
             LOGGER.debug("Tick for symbol %s received during cooldown period: %s", tick.symbol, tick)
             return None
 
         signal = self._strategy.on_tick(symbol=tick.symbol, window=self._buffer.get_ticks(tick.symbol))
         if signal:
             LOGGER.debug("Emitting signal: %s for symbol: %s", signal, tick.symbol)
+            self._last_signal_time = tick.timestamp
             if self._metric:
                 self._metric.signals_total.labels(symbol=tick.symbol, side=signal.side).inc()
         return signal

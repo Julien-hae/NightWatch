@@ -57,7 +57,7 @@ class NightwatchMetrics:
             registry=self.registry,
         )
 
-    def get_counter_value(self, counter: Counter, **labels: str) -> float:
+    def get_counter_value(self, counter: Counter, **labels: str) -> float | None:
         """Return the current value of a counter for the given label combination.
 
         Args:
@@ -66,10 +66,16 @@ class NightwatchMetrics:
 
         Returns:
             The current float value of the counter for the specified labels,
-            or 0.0 if no observations have been recorded yet.
-
-        Example:
-            >>> metrics.get_counter_value(metrics.signals_total, symbol="XBTUSD", side="BUY")
-            3.0
+            or None if no observations have been recorded yet.
         """
-        return counter.labels(**labels)._value.get()  # type: ignore[no-any-return]
+        for metric in counter.collect():
+            for sample in metric.samples:
+                sample_labels = getattr(sample, "labels", None)
+                if sample_labels is None:
+                    sample_labels = sample[1]
+                if sample_labels == labels:
+                    sample_value = getattr(sample, "value", None)
+                    if sample_value is None:
+                        sample_value = sample[2]
+                    return float(sample_value)
+        return None

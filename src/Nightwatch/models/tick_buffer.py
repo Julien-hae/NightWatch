@@ -33,12 +33,12 @@ class TickBuffer:
 
     def get_latest_tick(self, symbol: str) -> MarketTick | None:
         """Return the most recent tick for *symbol*, or None if no ticks are available."""
-        ticks = self.get_ticks(symbol)
+        ticks = self.ticks.get(symbol, None)
         return ticks[-1] if ticks else None
 
     def get_first_tick(self, symbol: str) -> MarketTick | None:
         """Return the oldest tick for *symbol*, or None if no ticks are available."""
-        ticks = self.get_ticks(symbol)
+        ticks = self.ticks.get(symbol, None)
         return ticks[0] if ticks else None
 
     def get_ticks_within(self, symbol: str, seconds: float) -> deque[MarketTick]:
