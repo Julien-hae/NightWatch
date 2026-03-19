@@ -16,6 +16,8 @@ LOGGER = logging.getLogger(__name__)
 class MomentumBurstStrategy(Strategy):
     """A trading strategy that generates BUY or SELL signals when price moves beyond a configured percentage threshold."""
 
+    NAME: str = "momentum_burst_v1"
+
     def __init__(self, window_sec: float = 10.0, threshold_pct: float = 0.30, metric: NightwatchMetrics | None = None) -> None:
         """Initializes the MomentumBurstStrategy with the specified window size and threshold percentage."""
         self.window_sec = window_sec
@@ -33,7 +35,7 @@ class MomentumBurstStrategy(Strategy):
             Signal | None: A buy signal if the conditions are met, otherwise None.
         """
         if self._metric:
-            self._metric.strategy_evaluations_total.labels(symbol=symbol, strategy="momentum_burst_v1").inc()
+            self._metric.strategy_evaluations_total.labels(symbol=symbol, strategy=self.NAME).inc()
 
         if len(window) < 2:  # noqa: PLR2004
             LOGGER.debug(
@@ -73,7 +75,7 @@ class MomentumBurstStrategy(Strategy):
             symbol=symbol,
             side=side,
             strength=float(abs(delta_pct)),
-            strategy="momentum_burst_v1",
+            strategy=self.NAME,
             rationale={
                 "delta_pct": float(delta_pct),
                 "window_sec": self.window_sec,
