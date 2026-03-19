@@ -24,7 +24,7 @@ class StrategyRunner:
         self._strategy = strategy
         self._buffer = buffer
         self._metric = metric
-        self._last_signal_time: datetime | None = None
+        self._last_signal_time: dict[str, datetime] = {}
 
     def on_market_tick(self, tick: MarketTick) -> Signal | None:
         """Process a market tick and determine if a trading signal should be emitted."""
@@ -35,7 +35,8 @@ class StrategyRunner:
                 self._metric.signals_suppressed_total.labels(reason="first_tick").inc()
             LOGGER.warning("Received first tick for symbol %s: %s", tick.symbol, tick)
             return None
-        if self._last_signal_time is not None and tick.timestamp - self._last_signal_time <= self._cooldown:
+        last_signal = self._last_signal_time.get(tick.symbol, None)
+        if last_signal is not None and tick.timestamp - last_signal <= self._cooldown:
             if self._metric:
                 self._metric.signals_suppressed_total.labels(reason="cooldown").inc()
             LOGGER.warning("Tick for symbol %s received during cooldown period: %s", tick.symbol, tick)
@@ -54,7 +55,7 @@ class StrategyRunner:
                 "threshold_pct": signal.rationale.get("threshold_pct", None),
             }
             LOGGER.debug(json.dumps(log, default=str))
-            self._last_signal_time = tick.timestamp
+            self._last_signal_time[tick.symbol] = tick.timestamp
             if self._metric:
                 self._metric.signals_total.labels(symbol=tick.symbol, side=signal.side, strategy=signal.strategy).inc()
         return signal
