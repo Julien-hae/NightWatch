@@ -1,5 +1,6 @@
 """Module responsible for running a trading strategy, including buffering market ticks and enforcing cooldown periods between signals."""
 
+import json
 import logging
 from datetime import datetime, timedelta
 
@@ -30,22 +31,42 @@ class StrategyRunner:
         first_tick = self._buffer.get_first_tick(tick.symbol)
         self._buffer.add_tick(tick)
         if not first_tick:
-            LOGGER.debug("Received first tick for symbol %s: %s", tick.symbol, tick)
+            if self._metric:
+                self._metric.signals_suppressed_total.labels(reason="first_tick").inc()
+            LOGGER.warning("Received first tick for symbol %s: %s", tick.symbol, tick)
             return None
         if self._last_signal_time is not None and tick.timestamp - self._last_signal_time <= self._cooldown:
-            LOGGER.debug("Tick for symbol %s received during cooldown period: %s", tick.symbol, tick)
+            if self._metric:
+                self._metric.signals_suppressed_total.labels(reason="cooldown").inc()
+            LOGGER.warning("Tick for symbol %s received during cooldown period: %s", tick.symbol, tick)
             return None
 
         signal = self._strategy.on_tick(symbol=tick.symbol, window=self._buffer.get_ticks(tick.symbol))
         if signal:
-            LOGGER.debug("Emitting signal: %s for symbol: %s", signal, tick.symbol)
+            log = {
+                "event": "signal",
+                "signal_id": str(signal.uid),
+                "symbol": tick.symbol,
+                "side": signal.side,
+                "strategy": signal.strategy,
+                "delta_pct": signal.rationale.get("delta_pct", None),
+                "window_sec": signal.rationale.get("window_sec", None),
+                "threshold_pct": signal.rationale.get("threshold_pct", None),
+            }
+            LOGGER.debug(json.dumps(log, default=str))
             self._last_signal_time = tick.timestamp
             if self._metric:
-                self._metric.signals_total.labels(symbol=tick.symbol, side=signal.side).inc()
+                self._metric.signals_total.labels(symbol=tick.symbol, side=signal.side, strategy=signal.strategy).inc()
         return signal
 
     def get_signal_totals(self, **labels: str) -> float | None:
         """Return the total number of signals emitted by the strategy."""
         if self._metric:
             return self._metric.get_counter_value(self._metric.signals_total, **labels)
+        return None
+
+    def get_suppressed_signal_totals(self, **labels: str) -> float | None:
+        """Return the total number of signals suppressed by the strategy."""
+        if self._metric:
+            return self._metric.get_counter_value(self._metric.signals_suppressed_total, **labels)
         return None

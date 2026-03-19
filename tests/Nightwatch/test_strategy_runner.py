@@ -118,3 +118,26 @@ class TestStrategyRunner(unittest.TestCase):
             i += 1
         self.assertIsNotNone(signal)
         self.assertEqual(signal.side, "BUY")  # type: ignore[union-attr]
+
+    def test_logging_contains_required_fields(self) -> None:
+        """Test that the logs contain the required fields when emitting signals."""
+        with self.assertLogs("Nightwatch.strategy_runner", level="DEBUG") as log:
+            ticks = deque(
+                [
+                    make_tick(price=Decimal("100"), timestamp=self.start_time),
+                    make_tick(price=Decimal("105"), timestamp=self.start_time + timedelta(seconds=5)),
+                    make_tick(price=Decimal("115"), timestamp=self.start_time + timedelta(seconds=10)),
+                ]
+            )
+            for tick in ticks:
+                self.runner.on_market_tick(tick)
+
+        log_output = "\n".join(log.output)
+        self.assertIn("event", log_output)
+        self.assertIn("signal_id", log_output)
+        self.assertIn("symbol", log_output)
+        self.assertIn("side", log_output)
+        self.assertIn("strategy", log_output)
+        self.assertIn("delta_pct", log_output)
+        self.assertIn("window_sec", log_output)
+        self.assertIn("threshold_pct", log_output)

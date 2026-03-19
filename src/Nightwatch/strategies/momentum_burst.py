@@ -5,6 +5,7 @@ from collections import deque
 from datetime import timedelta
 from decimal import Decimal
 
+from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.signal import Signal
 from Nightwatch.strategies.strategy import Strategy
@@ -15,10 +16,11 @@ LOGGER = logging.getLogger(__name__)
 class MomentumBurstStrategy(Strategy):
     """A trading strategy that generates BUY or SELL signals when price moves beyond a configured percentage threshold."""
 
-    def __init__(self, window_sec: float = 10.0, threshold_pct: float = 30) -> None:
+    def __init__(self, window_sec: float = 10.0, threshold_pct: float = 30, metric: NightwatchMetrics | None = None) -> None:
         """Initializes the MomentumBurstStrategy with the specified window size and threshold percentage."""
         self.window_sec = window_sec
         self.threshold_pct = threshold_pct
+        self._metric = metric
 
     def on_tick(self, symbol: str, window: deque[MarketTick]) -> Signal | None:
         """Generates a BUY or SELL signal if the price has been rising or falling and crosses a certain threshold.
@@ -54,6 +56,10 @@ class MomentumBurstStrategy(Strategy):
             return None
 
         delta_pct = (last_tick.price - start_tick.price) / start_tick.price * 100
+
+        if self._metric:
+            self._metric.strategy_evaluations_total.labels(symbol=symbol, strategy="momentum_burst_v1").inc()
+
         if delta_pct >= Decimal(str(self.threshold_pct)):
             side = "BUY"
         elif delta_pct <= Decimal(str(-self.threshold_pct)):
@@ -76,3 +82,9 @@ class MomentumBurstStrategy(Strategy):
             source="trade-service",
             schema_version=1,
         )
+
+    def get_strategy_evaluations_total(self, **labels: str) -> float | None:
+        """Return the total number of strategy evaluations performed."""
+        if self._metric:
+            return self._metric.get_counter_value(self._metric.strategy_evaluations_total, **labels)
+        return None
