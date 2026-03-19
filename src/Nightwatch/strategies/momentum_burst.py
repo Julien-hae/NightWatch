@@ -81,8 +81,8 @@ class MomentumBurstStrategy(Strategy):
                 "window_sec": self.window_sec,
                 "threshold_pct": self.threshold_pct,
             },
-            source="trade-service",
-            schema_version=1,
+            source=last_tick.source,
+            schema_version=last_tick.schema_version,
         )
 
     def get_strategy_evaluations_total(self, **labels: str) -> float | None:
