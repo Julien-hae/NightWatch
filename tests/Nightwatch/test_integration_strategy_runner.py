@@ -79,11 +79,9 @@ class TestSignalsTotalViaNats(unittest.TestCase):
         )
 
         async def _test() -> None:
-            received: list[MarketTick] = []
 
             async def _on_tick(tick: MarketTick) -> None:
                 self.runner.on_market_tick(tick)
-                received.append(tick)
 
             await self.subscriber.subscribe(subject="market.tick.>", cb=_on_tick)
 
