@@ -19,12 +19,12 @@ class StrategyRunner:
     def __init__(
         self, strategy: Strategy, buffer: TickBuffer, cooldown: timedelta = timedelta(seconds=0), metric: NightwatchMetrics | None = None
     ) -> None:
-        """Manages the execution of a trading strategy, including buffering ticks and enforcing cooldowns."""
+        """Initializes the StrategyRunner with the given strategy, tick buffer, cooldown period, and optional metrics."""
         self._cooldown = cooldown
         self._strategy = strategy
         self._buffer = buffer
         self._metric = metric
-        self._last_signal_time: datetime | None = None
+        self._last_signal_time: dict[str, datetime] = {}
 
     def on_market_tick(self, tick: MarketTick) -> Signal | None:
         """Process a market tick and determine if a trading signal should be emitted."""
@@ -33,12 +33,13 @@ class StrategyRunner:
         if not first_tick:
             if self._metric:
                 self._metric.signals_suppressed_total.labels(reason="first_tick").inc()
-            LOGGER.warning("Received first tick for symbol %s: %s", tick.symbol, tick)
+            LOGGER.info("Received first tick for symbol %s: %s", tick.symbol, tick)
             return None
-        if self._last_signal_time is not None and tick.timestamp - self._last_signal_time <= self._cooldown:
+        last_signal = self._last_signal_time.get(tick.symbol, None)
+        if last_signal is not None and tick.timestamp - last_signal <= self._cooldown:
             if self._metric:
                 self._metric.signals_suppressed_total.labels(reason="cooldown").inc()
-            LOGGER.warning("Tick for symbol %s received during cooldown period: %s", tick.symbol, tick)
+            LOGGER.debug("Tick for symbol %s received during cooldown period: %s", tick.symbol, tick)
             return None
 
         signal = self._strategy.on_tick(symbol=tick.symbol, window=self._buffer.get_ticks(tick.symbol))
@@ -53,16 +54,22 @@ class StrategyRunner:
                 "window_sec": signal.rationale.get("window_sec", None),
                 "threshold_pct": signal.rationale.get("threshold_pct", None),
             }
-            LOGGER.debug(json.dumps(log, default=str))
-            self._last_signal_time = tick.timestamp
+            LOGGER.info(json.dumps(log, default=str))
+            self._last_signal_time[tick.symbol] = tick.timestamp
             if self._metric:
-                self._metric.signals_total.labels(symbol=tick.symbol, side=signal.side, strategy=signal.strategy).inc()
+                self._metric.signals_total.labels(symbol=tick.symbol, side=signal.side.value, strategy=signal.strategy).inc()
         return signal
 
     def get_signal_totals(self, **labels: str) -> float | None:
         """Return the total number of signals emitted by the strategy."""
         if self._metric:
-            return self._metric.get_counter_value(self._metric.signals_total, **labels)
+            if "strategy" in labels:
+                return self._metric.get_counter_value(self._metric.signals_total, **labels)
+            return self._metric.get_counter_value(
+                self._metric.signals_total,
+                strategy=self._strategy.NAME,
+                **labels,
+            )
         return None
 
     def get_suppressed_signal_totals(self, **labels: str) -> float | None:

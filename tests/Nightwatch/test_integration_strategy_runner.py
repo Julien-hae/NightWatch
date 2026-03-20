@@ -77,10 +77,10 @@ class TestSignalsTotalViaNats(unittest.TestCase):
         """Ingest live Kraken ticks via NATS for 30 s and verify signals_total increases."""
         symbol = "BTC/USD"
 
-        before = (self.runner.get_signal_totals(symbol=symbol, side="BUY", strategy="momentum_burst_v1") or 0.0) + (
-            self.runner.get_signal_totals(symbol=symbol, side="SELL", strategy="momentum_burst_v1") or 0.0
+        before = (self.runner.get_signal_totals(symbol=symbol, side="BUY", strategy=self.strategy.NAME) or 0.0) + (
+            self.runner.get_signal_totals(symbol=symbol, side="SELL", strategy=self.strategy.NAME) or 0.0
         )
-        strategy_evaluations_before = self.strategy.get_strategy_evaluations_total(symbol=symbol, strategy="momentum_burst_v1") or 0.0
+        strategy_evaluations_before = self.strategy.get_strategy_evaluations_total(symbol=symbol, strategy=self.strategy.NAME) or 0.0
         signal_suppressed_before = self.runner.get_suppressed_signal_totals(reason="first_tick") or 0.0
 
         async def _test() -> None:
@@ -104,10 +104,10 @@ class TestSignalsTotalViaNats(unittest.TestCase):
 
         self._run(_test())
 
-        after = (self.runner.get_signal_totals(symbol=symbol, side="BUY", strategy="momentum_burst_v1") or 0.0) + (
-            self.runner.get_signal_totals(symbol=symbol, side="SELL", strategy="momentum_burst_v1") or 0.0
+        after = (self.runner.get_signal_totals(symbol=symbol, side="BUY", strategy=self.strategy.NAME) or 0.0) + (
+            self.runner.get_signal_totals(symbol=symbol, side="SELL", strategy=self.strategy.NAME) or 0.0
         )
-        strategy_evaluations_after = self.strategy.get_strategy_evaluations_total(symbol=symbol, strategy="momentum_burst_v1") or 0.0
+        strategy_evaluations_after = self.strategy.get_strategy_evaluations_total(symbol=symbol, strategy=self.strategy.NAME) or 0.0
         signal_suppressed_after = self.runner.get_suppressed_signal_totals(reason="first_tick") or 0.0
         ticks_consumed = self.metrics.get_counter_value(
             self.metrics.ticks_consumed_total,

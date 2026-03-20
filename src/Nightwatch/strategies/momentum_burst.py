@@ -7,7 +7,7 @@ from decimal import Decimal
 
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
-from Nightwatch.models.signal import Signal
+from Nightwatch.models.signal import Side, Signal
 from Nightwatch.strategies.strategy import Strategy
 
 LOGGER = logging.getLogger(__name__)
@@ -16,8 +16,14 @@ LOGGER = logging.getLogger(__name__)
 class MomentumBurstStrategy(Strategy):
     """A trading strategy that generates BUY or SELL signals when price moves beyond a configured percentage threshold."""
 
-    def __init__(self, window_sec: float = 10.0, threshold_pct: float = 30, metric: NightwatchMetrics | None = None) -> None:
+    NAME: str = "momentum_burst_v1"
+
+    def __init__(self, window_sec: float = 10.0, threshold_pct: float = 0.30, metric: NightwatchMetrics | None = None) -> None:
         """Initializes the MomentumBurstStrategy with the specified window size and threshold percentage."""
+        if window_sec <= 0:
+            raise ValueError("window_sec must be greater than 0")
+        if threshold_pct <= 0:
+            raise ValueError("threshold_pct must be greater than 0")
         self.window_sec = window_sec
         self.threshold_pct = threshold_pct
         self._metric = metric
@@ -32,6 +38,9 @@ class MomentumBurstStrategy(Strategy):
         Returns:
             Signal | None: A buy signal if the conditions are met, otherwise None.
         """
+        if self._metric:
+            self._metric.strategy_evaluations_total.labels(symbol=symbol, strategy=self.NAME).inc()
+
         if len(window) < 2:  # noqa: PLR2004
             LOGGER.debug(
                 "Not enough ticks in the window to evaluate the strategy for symbol %s. Required: 2, Found: %d", symbol, len(window)
@@ -54,16 +63,20 @@ class MomentumBurstStrategy(Strategy):
         if start_tick.price == Decimal("0"):
             LOGGER.warning("Start tick price is zero for symbol %s, cannot calculate percentage change.", symbol)
             return None
-
+        if last_tick.timestamp <= start_tick.timestamp:
+            LOGGER.warning(
+                "Last tick timestamp %s is not greater than start tick timestamp %s for symbol %s, cannot calculate percentage change.",
+                last_tick.timestamp,
+                start_tick.timestamp,
+                symbol,
+            )
+            return None
         delta_pct = (last_tick.price - start_tick.price) / start_tick.price * 100
 
-        if self._metric:
-            self._metric.strategy_evaluations_total.labels(symbol=symbol, strategy="momentum_burst_v1").inc()
-
         if delta_pct >= Decimal(str(self.threshold_pct)):
-            side = "BUY"
+            side = Side.BUY
         elif delta_pct <= Decimal(str(-self.threshold_pct)):
-            side = "SELL"
+            side = Side.SELL
         else:
             LOGGER.debug("Delta percentage %s for symbol %s did not cross any threshold.", delta_pct, symbol)
             return None
@@ -73,18 +86,24 @@ class MomentumBurstStrategy(Strategy):
             symbol=symbol,
             side=side,
             strength=float(abs(delta_pct)),
-            strategy="momentum_burst_v1",
+            strategy=self.NAME,
             rationale={
                 "delta_pct": float(delta_pct),
                 "window_sec": self.window_sec,
                 "threshold_pct": self.threshold_pct,
             },
-            source="trade-service",
-            schema_version=1,
+            source=last_tick.source,
+            schema_version=last_tick.schema_version,
         )
 
     def get_strategy_evaluations_total(self, **labels: str) -> float | None:
         """Return the total number of strategy evaluations performed."""
         if self._metric:
-            return self._metric.get_counter_value(self._metric.strategy_evaluations_total, **labels)
+            if "strategy" in labels:
+                return self._metric.get_counter_value(self._metric.strategy_evaluations_total, **labels)
+            return self._metric.get_counter_value(
+                self._metric.strategy_evaluations_total,
+                strategy=self.NAME,
+                **labels,
+            )
         return None

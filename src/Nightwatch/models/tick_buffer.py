@@ -29,7 +29,9 @@ class TickBuffer:
 
     def get_ticks(self, symbol: str) -> deque[MarketTick]:
         """Get the deque of ticks for a given symbol, or an empty deque if no ticks are stored for that symbol."""
-        return deque(self.ticks.get(symbol, []))
+        return deque(
+            self.ticks.get(symbol, [])
+        )  # TODO: return a copy to prevent external mutation of the internal buffer. Might be a performance issue
 
     def get_latest_tick(self, symbol: str) -> MarketTick | None:
         """Return the most recent tick for *symbol*, or None if no ticks are available."""
