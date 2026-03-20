@@ -80,8 +80,10 @@ class TestSignalsTotalViaNats(unittest.TestCase):
         before = (self.runner.get_signal_totals(symbol=symbol, side="BUY", strategy=self.strategy.NAME) or 0.0) + (
             self.runner.get_signal_totals(symbol=symbol, side="SELL", strategy=self.strategy.NAME) or 0.0
         )
-        strategy_evaluations_before = self.strategy.get_strategy_evaluations_total(symbol=symbol, strategy=self.strategy.NAME) or 0.0
-        signal_suppressed_before = self.runner.get_suppressed_signal_totals(reason="first_tick") or 0.0
+        strategy_evaluations_before = (
+            self.metrics.get_counter_value(self.metrics.strategy_evaluations_total, symbol=symbol, strategy=self.strategy.NAME) or 0.0
+        )
+        signal_suppressed_before = self.metrics.get_counter_value(self.metrics.signals_suppressed_total, reason="first_tick") or 0.0
 
         async def _test() -> None:
             async def _on_tick(tick: MarketTick) -> None:
@@ -107,8 +109,10 @@ class TestSignalsTotalViaNats(unittest.TestCase):
         after = (self.runner.get_signal_totals(symbol=symbol, side="BUY", strategy=self.strategy.NAME) or 0.0) + (
             self.runner.get_signal_totals(symbol=symbol, side="SELL", strategy=self.strategy.NAME) or 0.0
         )
-        strategy_evaluations_after = self.strategy.get_strategy_evaluations_total(symbol=symbol, strategy=self.strategy.NAME) or 0.0
-        signal_suppressed_after = self.runner.get_suppressed_signal_totals(reason="first_tick") or 0.0
+        strategy_evaluations_after = (
+            self.metrics.get_counter_value(self.metrics.strategy_evaluations_total, symbol=symbol, strategy=self.strategy.NAME) or 0.0
+        )
+        signal_suppressed_after = self.metrics.get_counter_value(self.metrics.signals_suppressed_total, reason="first_tick") or 0.0
         ticks_consumed = self.metrics.get_counter_value(
             self.metrics.ticks_consumed_total,
             symbol=symbol,

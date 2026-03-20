@@ -129,7 +129,9 @@ class TestMomentumBurstStrategy(unittest.TestCase):
 
     def test_strategy_evaluations_total(self) -> None:
         """Test that the counter strategy_evaluations_total is incremented correctly."""
-        initial_evaluations = self.strategy.get_strategy_evaluations_total(symbol="BTC/USD", strategy=self.strategy.NAME) or 0
+        initial_evaluations = (
+            self._metric.get_counter_value(self._metric.strategy_evaluations_total, symbol="BTC/USD", strategy=self.strategy.NAME) or 0
+        )
         ticks = deque(
             [
                 make_tick(price=Decimal("100"), timestamp=self.start_time),
@@ -139,7 +141,8 @@ class TestMomentumBurstStrategy(unittest.TestCase):
         )
         self.strategy.on_tick(ticks[-1].symbol, ticks)
         self.assertEqual(
-            self.strategy.get_strategy_evaluations_total(symbol="BTC/USD", strategy=self.strategy.NAME), initial_evaluations + 1
+            self._metric.get_counter_value(self._metric.strategy_evaluations_total, symbol="BTC/USD", strategy=self.strategy.NAME),
+            initial_evaluations + 1,
         )
 
     def test_invalid_parameters(self) -> None:
