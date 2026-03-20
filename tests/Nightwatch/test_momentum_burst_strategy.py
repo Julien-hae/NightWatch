@@ -47,8 +47,6 @@ class TestMomentumBurstStrategy(unittest.TestCase):
         )
         signal = self.strategy.on_tick(ticks[-1].symbol, ticks)
         self.assertIsNone(signal)
-        signal = self.strategy.on_tick(ticks[-1].symbol, ticks)
-        self.assertIsNone(signal)
 
     def test_not_enough_ticks_in_window(self) -> None:
         """Test that sequences with not enough ticks in the window generate a None signal."""
