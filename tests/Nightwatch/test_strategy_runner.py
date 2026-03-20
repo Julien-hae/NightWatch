@@ -1,4 +1,4 @@
-# mypy: disable-error-code="import-untyped"
+# mypy: disable-error-code="import-untyped, union-attr"
 """Unit tests for the StrategyRunner class."""
 
 import unittest
@@ -69,7 +69,7 @@ class TestStrategyRunner(unittest.TestCase):
         next_tick = make_tick(price=Decimal("130"), timestamp=self.start_time + timedelta(seconds=11))
         second_signal_no_cd = runner_no_cd.on_market_tick(next_tick)
         self.assertIsNotNone(second_signal_no_cd)
-        self.assertEqual(second_signal_no_cd.side, "BUY")  # type: ignore[union-attr]
+        self.assertEqual(second_signal_no_cd.side, "BUY")
 
         strategy_cd = MomentumBurstStrategy(threshold_pct=1, window_sec=60, metric=self._metric)
         buffer_cd = TickBuffer(max_ticks_per_symbol=30)
@@ -180,7 +180,9 @@ class TestStrategyRunner(unittest.TestCase):
 
     def test_signals_total(self) -> None:
         """Test that the counter signals_total is incremented correctly."""
-        initial_evaluations = self.runner.get_signal_totals(symbol="BTC/USD", side="BUY") or 0
+        initial_evaluations = (
+            self._metric.get_counter_value(self._metric.signals_total, symbol="BTC/USD", side="BUY", strategy=self.__strategy.NAME) or 0
+        )
         ticks = deque(
             [
                 make_tick(price=Decimal("100"), timestamp=self.start_time),
@@ -189,7 +191,9 @@ class TestStrategyRunner(unittest.TestCase):
             ]
         )
         feed_ticks(self.runner, ticks)
-        final_evaluations = self.runner.get_signal_totals(symbol="BTC/USD", side="BUY") or 0
+        final_evaluations = (
+            self._metric.get_counter_value(self._metric.signals_total, symbol="BTC/USD", side="BUY", strategy=self.__strategy.NAME) or 0
+        )
         self.assertEqual(final_evaluations, initial_evaluations + 1)
 
     def test_cooldown_zero_does_not_suppress_same_timestamp(self) -> None:
