@@ -7,7 +7,7 @@ from decimal import Decimal
 
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
-from Nightwatch.models.signal import Signal
+from Nightwatch.models.signal import Side, Signal
 from Nightwatch.strategies.strategy import Strategy
 
 LOGGER = logging.getLogger(__name__)
@@ -20,6 +20,10 @@ class MomentumBurstStrategy(Strategy):
 
     def __init__(self, window_sec: float = 10.0, threshold_pct: float = 0.30, metric: NightwatchMetrics | None = None) -> None:
         """Initializes the MomentumBurstStrategy with the specified window size and threshold percentage."""
+        if window_sec <= 0:
+            raise ValueError("window_sec must be greater than 0")
+        if threshold_pct <= 0:
+            raise ValueError("threshold_pct must be greater than 0")
         self.window_sec = window_sec
         self.threshold_pct = threshold_pct
         self._metric = metric
@@ -63,9 +67,9 @@ class MomentumBurstStrategy(Strategy):
         delta_pct = (last_tick.price - start_tick.price) / start_tick.price * 100
 
         if delta_pct >= Decimal(str(self.threshold_pct)):
-            side = "BUY"
+            side = Side.BUY
         elif delta_pct <= Decimal(str(-self.threshold_pct)):
-            side = "SELL"
+            side = Side.SELL
         else:
             LOGGER.debug("Delta percentage %s for symbol %s did not cross any threshold.", delta_pct, symbol)
             return None

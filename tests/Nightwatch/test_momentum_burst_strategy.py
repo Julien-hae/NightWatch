@@ -5,8 +5,8 @@ from collections import deque
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from Nightwatch.metrics import NightwatchMetrics  # type: ignore[import-untyped]
-from Nightwatch.strategies.momentum_burst import MomentumBurstStrategy  # type: ignore[import-untyped]
+from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.strategies.momentum_burst import MomentumBurstStrategy
 from tests.fixtures.tick_factory import make_tick
 
 
@@ -31,7 +31,7 @@ class TestMomentumBurstStrategy(unittest.TestCase):
         )
         signal = self.strategy.on_tick(ticks[-1].symbol, ticks)
         self.assertIsNotNone(signal)
-        self.assertEqual(signal.side, "BUY")
+        self.assertEqual(signal.side.value, "BUY")  # type: ignore[union-attr]
 
     def test_falling_seq_crosses_threshold(self) -> None:
         """Test that a falling sequence of ticks crossing the threshold generates a sell signal."""
@@ -45,7 +45,7 @@ class TestMomentumBurstStrategy(unittest.TestCase):
         )
         signal = self.strategy.on_tick(ticks[-1].symbol, ticks)
         self.assertIsNotNone(signal)
-        self.assertEqual(signal.side, "SELL")
+        self.assertEqual(signal.side.value, "SELL")  # type: ignore[union-attr]
 
     def test_noise_under_thresholds(self) -> None:
         """Test that noisy sequences outside thresholds generate a None signal."""
@@ -99,7 +99,7 @@ class TestMomentumBurstStrategy(unittest.TestCase):
         )
         signal = self.strategy.on_tick(ticks[-1].symbol, ticks)
         self.assertIsNotNone(signal)
-        self.assertEqual(signal.side, "BUY")
+        self.assertEqual(signal.side.value, "BUY")  # type: ignore[union-attr]
 
     def test_just_below_threshold(self) -> None:
         """Test that a sequence that is just below the threshold generates a None signal."""
@@ -141,3 +141,10 @@ class TestMomentumBurstStrategy(unittest.TestCase):
         self.assertEqual(
             self.strategy.get_strategy_evaluations_total(symbol="BTC/USD", strategy=self.strategy.NAME), initial_evaluations + 1
         )
+
+    def test_invalid_parameters(self) -> None:
+        """Test that invalid parameters raise ValueError."""
+        with self.assertRaises(ValueError):
+            MomentumBurstStrategy(window_sec=-10, threshold_pct=10)
+        with self.assertRaises(ValueError):
+            MomentumBurstStrategy(window_sec=10, threshold_pct=-10)
