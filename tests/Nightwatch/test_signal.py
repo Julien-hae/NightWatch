@@ -3,8 +3,9 @@
 import unittest
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 
-from Nightwatch.models.signal import Signal  # type: ignore[import-untyped]
+from Nightwatch.models.signal import Side, Signal
 from tests.fixtures.signal_factory import make_signal
 
 
@@ -16,10 +17,10 @@ class TestSignal(unittest.TestCase):
         self.signal = make_signal(
             symbol="BTCUSD",
             timestamp=datetime.now(timezone.utc),
-            side="BUY",
+            side=Side.BUY,
             strategy="momentum_burst_v1",
             strength=1.0,
-            rationale={"delta_pct": 0.05, "window_sec": 3.0, "threshold_pct": 0.02},
+            rationale={"delta_pct": Decimal("0.05"), "window_sec": Decimal("3.0"), "threshold_pct": Decimal("0.02")},
             source="trade-service",
             schema_version=1,
         )
@@ -29,11 +30,11 @@ class TestSignal(unittest.TestCase):
         self.assertIsNotNone(self.signal.uid)
         self.assertEqual(self.signal.symbol, "BTCUSD")
         self.assertIsInstance(self.signal.timestamp, datetime)
-        self.assertEqual(self.signal.side, "BUY")
+        self.assertEqual(self.signal.side.value, "BUY")
         self.assertEqual(self.signal.strength, 1.0)
-        self.assertEqual(self.signal.rationale["delta_pct"], 0.05)
-        self.assertEqual(self.signal.rationale["window_sec"], 3.0)
-        self.assertEqual(self.signal.rationale["threshold_pct"], 0.02)
+        self.assertEqual(self.signal.rationale["delta_pct"], Decimal("0.05"))
+        self.assertEqual(self.signal.rationale["window_sec"], Decimal("3.0"))
+        self.assertEqual(self.signal.rationale["threshold_pct"], Decimal("0.02"))
         self.assertEqual(self.signal.source, "trade-service")
         self.assertEqual(self.signal.schema_version, 1)
         self.assertIsInstance(self.signal.timestamp, datetime)
@@ -41,8 +42,8 @@ class TestSignal(unittest.TestCase):
 
     def test_side_only_accepts_buy_or_sell(self) -> None:
         """Test that the 'side' attribute only accepts 'BUY' or 'SELL'."""
-        with self.assertRaises(ValueError):
-            make_signal(side="ERROR")
+        with self.assertRaises(AttributeError):
+            make_signal(side=Side.ERROR)  # type: ignore[attr-defined]
 
     def test_strength_non_negative(self) -> None:
         """Test that the 'strength' attribute must be non-negative (>= 0)."""
@@ -57,7 +58,7 @@ class TestSignal(unittest.TestCase):
         self.assertEqual(deserialized_signal.uid, self.signal.uid)
         self.assertEqual(deserialized_signal.symbol, self.signal.symbol)
         self.assertEqual(deserialized_signal.timestamp, self.signal.timestamp)
-        self.assertEqual(deserialized_signal.side, self.signal.side)
+        self.assertEqual(deserialized_signal.side.value, self.signal.side.value)
         self.assertEqual(deserialized_signal.strategy, self.signal.strategy)
         self.assertEqual(deserialized_signal.strength, self.signal.strength)
         self.assertEqual(deserialized_signal.rationale, self.signal.rationale)
@@ -72,7 +73,7 @@ class TestSignal(unittest.TestCase):
             "side": "BUY",
             "strategy": "momentum_burst_v1",
             "strength": 1.0,
-            "rationale": {"delta_pct": 0.05, "window_sec": 3.0, "threshold_pct": 0.02},
+            "rationale": {"delta_pct": Decimal("0.05"), "window_sec": Decimal("3.0"), "threshold_pct": Decimal("0.02")},
             "source": "trade-service",
             "schema_version": 1,
         }
@@ -94,12 +95,12 @@ class TestSignal(unittest.TestCase):
     def test_missing_fields(self) -> None:
         """Test that missing required fields raise a validation error."""
         with self.assertRaises(ValueError):
-            Signal(
+            Signal(  # type: ignore[call-arg]
                 timestamp=datetime.now(timezone.utc),
-                side="BUY",
+                side=Side.BUY,
                 strategy="momentum_burst_v1",
                 strength=1.0,
-                rationale={"delta_pct": 0.05, "window_sec": 3.0, "threshold_pct": 0.02},
+                rationale={"delta_pct": Decimal("0.05"), "window_sec": Decimal("3.0"), "threshold_pct": Decimal("0.02")},
                 source="trade-service",
                 schema_version=1,
             )

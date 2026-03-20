@@ -1,3 +1,4 @@
+# mypy: disable-error-code="import-untyped, union-attr"
 """Integration tests for the StrategyRunner using live data from Kraken."""
 
 import asyncio
@@ -77,11 +78,13 @@ class TestSignalsTotalViaNats(unittest.TestCase):
         """Ingest live Kraken ticks via NATS for 30 s and verify signals_total increases."""
         symbol = "BTC/USD"
 
-        before = (self.runner.get_signal_totals(symbol=symbol, side="BUY", strategy=self.strategy.NAME) or 0.0) + (
-            self.runner.get_signal_totals(symbol=symbol, side="SELL", strategy=self.strategy.NAME) or 0.0
+        before = (
+            self.metrics.get_counter_value(self.metrics.signals_total, symbol=symbol, side="BUY", strategy=self.strategy.NAME) or 0.0
+        ) + (self.metrics.get_counter_value(self.metrics.signals_total, symbol=symbol, side="SELL", strategy=self.strategy.NAME) or 0.0)
+        strategy_evaluations_before = (
+            self.metrics.get_counter_value(self.metrics.strategy_evaluations_total, symbol=symbol, strategy=self.strategy.NAME) or 0.0
         )
-        strategy_evaluations_before = self.strategy.get_strategy_evaluations_total(symbol=symbol, strategy=self.strategy.NAME) or 0.0
-        signal_suppressed_before = self.runner.get_suppressed_signal_totals(reason="first_tick") or 0.0
+        signal_suppressed_before = self.metrics.get_counter_value(self.metrics.signals_suppressed_total, reason="first_tick") or 0.0
 
         async def _test() -> None:
             async def _on_tick(tick: MarketTick) -> None:
@@ -104,11 +107,13 @@ class TestSignalsTotalViaNats(unittest.TestCase):
 
         self._run(_test())
 
-        after = (self.runner.get_signal_totals(symbol=symbol, side="BUY", strategy=self.strategy.NAME) or 0.0) + (
-            self.runner.get_signal_totals(symbol=symbol, side="SELL", strategy=self.strategy.NAME) or 0.0
+        after = (
+            self.metrics.get_counter_value(self.metrics.signals_total, symbol=symbol, side="BUY", strategy=self.strategy.NAME) or 0.0
+        ) + (self.metrics.get_counter_value(self.metrics.signals_total, symbol=symbol, side="SELL", strategy=self.strategy.NAME) or 0.0)
+        strategy_evaluations_after = (
+            self.metrics.get_counter_value(self.metrics.strategy_evaluations_total, symbol=symbol, strategy=self.strategy.NAME) or 0.0
         )
-        strategy_evaluations_after = self.strategy.get_strategy_evaluations_total(symbol=symbol, strategy=self.strategy.NAME) or 0.0
-        signal_suppressed_after = self.runner.get_suppressed_signal_totals(reason="first_tick") or 0.0
+        signal_suppressed_after = self.metrics.get_counter_value(self.metrics.signals_suppressed_total, reason="first_tick") or 0.0
         ticks_consumed = self.metrics.get_counter_value(
             self.metrics.ticks_consumed_total,
             symbol=symbol,

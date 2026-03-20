@@ -36,7 +36,7 @@ class StrategyRunner:
             LOGGER.info("Received first tick for symbol %s: %s", tick.symbol, tick.uid)
             return None
         last_signal = self._last_signal_time.get(tick.symbol, None)
-        if last_signal is not None and tick.timestamp - last_signal <= self._cooldown:
+        if last_signal is not None and tick.timestamp - last_signal < self._cooldown:
             if self._metric:
                 self._metric.signals_suppressed_total.labels(reason="cooldown").inc()
             LOGGER.debug("Tick for symbol %s received during cooldown period: %s", tick.symbol, tick)
@@ -59,7 +59,7 @@ class StrategyRunner:
                 "event": "signal",
                 "signal_id": str(signal.uid),
                 "symbol": tick.symbol,
-                "side": signal.side,
+                "side": signal.side.value,
                 "strategy": signal.strategy,
                 "delta_pct": signal.rationale.get("delta_pct", None),
                 "window_sec": signal.rationale.get("window_sec", None),
@@ -70,21 +70,3 @@ class StrategyRunner:
             if self._metric:
                 self._metric.signals_total.labels(symbol=tick.symbol, side=signal.side.value, strategy=signal.strategy).inc()
         return signal
-
-    def get_signal_totals(self, **labels: str) -> float | None:
-        """Return the total number of signals emitted by the strategy."""
-        if self._metric:
-            if "strategy" in labels:
-                return self._metric.get_counter_value(self._metric.signals_total, **labels)
-            return self._metric.get_counter_value(
-                self._metric.signals_total,
-                strategy=self._strategy.NAME,
-                **labels,
-            )
-        return None
-
-    def get_suppressed_signal_totals(self, **labels: str) -> float | None:
-        """Return the total number of signals suppressed by the strategy."""
-        if self._metric:
-            return self._metric.get_counter_value(self._metric.signals_suppressed_total, **labels)
-        return None
