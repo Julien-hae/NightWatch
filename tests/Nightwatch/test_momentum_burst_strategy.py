@@ -148,3 +148,40 @@ class TestMomentumBurstStrategy(unittest.TestCase):
             MomentumBurstStrategy(window_sec=-10, threshold_pct=10)
         with self.assertRaises(ValueError):
             MomentumBurstStrategy(window_sec=10, threshold_pct=-10)
+
+    def test_determinism_same_ticks_yield_same_signals(self) -> None:
+        """Given the same tick sequence replayed twice, then emitted signals are identical."""
+        ticks = deque(
+            [
+                make_tick(price=Decimal("100"), timestamp=self.start_time),
+                make_tick(price=Decimal("105"), timestamp=self.start_time + timedelta(seconds=5)),
+                make_tick(price=Decimal("115"), timestamp=self.start_time + timedelta(seconds=10)),
+            ]
+        )
+
+        signals_run1 = [self.strategy.on_tick(t.symbol, deque(list(ticks)[: i + 1])) for i, t in enumerate(ticks)]
+
+        strategy2 = MomentumBurstStrategy(window_sec=10.0, threshold_pct=10)
+        signals_run2 = [strategy2.on_tick(t.symbol, deque(list(ticks)[: i + 1])) for i, t in enumerate(ticks)]
+
+        for s1, s2 in zip(signals_run1, signals_run2):
+            if s1 is None:
+                self.assertIsNone(s2)
+            else:
+                self.assertEqual(s1.side, s2.side)  # type: ignore[union-attr]
+                self.assertEqual(s1.strength, s2.strength)  # type: ignore[union-attr]
+
+    def test_all_ticks_same_timestamp_no_signal(self) -> None:
+        """Given all ticks have identical timestamps and different prices,
+        when evaluated, then no signal is emitted because the price move
+        happened in zero elapsed real time (delta_pct = 5%, but it's noise)."""
+        t = self.start_time
+        ticks = deque(
+            [
+                make_tick(price=Decimal("100"), timestamp=t),
+                make_tick(price=Decimal("105"), timestamp=t),
+                make_tick(price=Decimal("115"), timestamp=t),
+            ]
+        )
+        signal = self.strategy.on_tick(ticks[-1].symbol, ticks)
+        self.assertIsNone(signal)

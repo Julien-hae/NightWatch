@@ -63,7 +63,14 @@ class MomentumBurstStrategy(Strategy):
         if start_tick.price == Decimal("0"):
             LOGGER.warning("Start tick price is zero for symbol %s, cannot calculate percentage change.", symbol)
             return None
-
+        if last_tick.timestamp <= start_tick.timestamp:
+            LOGGER.warning(
+                "Last tick timestamp %s is not greater than start tick timestamp %s for symbol %s, cannot calculate percentage change.",
+                last_tick.timestamp,
+                start_tick.timestamp,
+                symbol,
+            )
+            return None
         delta_pct = (last_tick.price - start_tick.price) / start_tick.price * 100
 
         if delta_pct >= Decimal(str(self.threshold_pct)):

@@ -87,6 +87,27 @@ class TestStrategyRunner(unittest.TestCase):
         self.assertIsNotNone(runner_cd._last_signal_time)
         self.assertIsNone(signal_during_cooldown)
 
+    def test_cooldown_increments_suppressed_metric(self) -> None:
+        """Given a signal was just emitted, when the next tick arrives within cooldown,
+        then signals_suppressed_total{reason='cooldown'} increments by 1."""
+        ticks = [
+            make_tick(price=Decimal("100"), timestamp=self.start_time),
+            make_tick(price=Decimal("105"), timestamp=self.start_time + timedelta(seconds=5)),
+            make_tick(price=Decimal("115"), timestamp=self.start_time + timedelta(seconds=10)),
+        ]
+        for tick in ticks:
+            self.runner.on_market_tick(tick)
+        suppressed_tick = make_tick(
+            price=Decimal("130"),
+            timestamp=self.start_time + timedelta(seconds=15),
+        )
+        result = self.runner.on_market_tick(suppressed_tick)
+
+        self.assertIsNone(result)
+        # THIS is the new assertion — the metric must reflect the suppression
+        value = self.runner.get_suppressed_signal_totals(reason="cooldown")
+        self.assertEqual(value, 1.0)
+
     def test_integration_with_momentum_burst_strategy(self) -> None:
         """Test that the StrategyRunner correctly integrates with the MomentumBurstStrategy."""
 
