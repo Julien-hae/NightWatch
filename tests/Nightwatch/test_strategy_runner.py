@@ -1,3 +1,4 @@
+# mypy: disable-error-code="import-untyped"
 """Unit tests for the StrategyRunner class."""
 
 import unittest
@@ -68,7 +69,7 @@ class TestStrategyRunner(unittest.TestCase):
         next_tick = make_tick(price=Decimal("130"), timestamp=self.start_time + timedelta(seconds=15))
         second_signal_no_cd = runner_no_cd.on_market_tick(next_tick)
         self.assertIsNotNone(second_signal_no_cd)
-        self.assertEqual(second_signal_no_cd.side, "BUY")  # type: ignore[union-attr]
+        self.assertEqual(second_signal_no_cd.side, "BUY")
 
         strategy_cd = MomentumBurstStrategy(threshold_pct=1, window_sec=60, metric=self._metric)
         buffer_cd = TickBuffer(max_ticks_per_symbol=30)
@@ -179,7 +180,7 @@ class TestStrategyRunner(unittest.TestCase):
         self.assertEqual(runner.get_suppressed_signal_totals(reason="cooldown"), 1.0)
 
     def test_signals_total(self) -> None:
-        """Test that the counter strategy_evaluations_total is incremented correctly."""
+        """Test that the counter signals_total is incremented correctly."""
         initial_evaluations = self.runner.get_signal_totals(symbol="BTC/USD", side="BUY") or 0
         ticks = deque(
             [
