@@ -25,7 +25,7 @@ class MomentumBurstStrategy(Strategy):
         if threshold_pct <= 0:
             raise ValueError("threshold_pct must be greater than 0")
         self.window_sec = window_sec
-        self.threshold_pct = threshold_pct
+        self.threshold_pct = Decimal(str(threshold_pct))
         self._metric = metric
 
     def on_tick(self, symbol: str, window: deque[MarketTick]) -> Signal | None:
@@ -73,9 +73,9 @@ class MomentumBurstStrategy(Strategy):
             return None
         delta_pct = (last_tick.price - start_tick.price) / start_tick.price * 100
 
-        if delta_pct >= Decimal(str(self.threshold_pct)):
+        if delta_pct >= self.threshold_pct:
             side = Side.BUY
-        elif delta_pct <= Decimal(str(-self.threshold_pct)):
+        elif delta_pct <= -self.threshold_pct:
             side = Side.SELL
         else:
             LOGGER.debug("Delta percentage %s for symbol %s did not cross any threshold.", delta_pct, symbol)
