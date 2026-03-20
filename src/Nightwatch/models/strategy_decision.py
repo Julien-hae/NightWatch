@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Union
 
 from Nightwatch.models.signal import Side
 
@@ -13,4 +12,4 @@ class StrategyDecision:
 
     side: Side
     strength: float
-    rationale: dict[str, Union[float, Decimal]]
+    rationale: dict[str, float | Decimal]

@@ -30,14 +30,14 @@ class MomentumBurstStrategy(Strategy):
         self._metric = metric
 
     def on_tick(self, symbol: str, window: deque[MarketTick]) -> StrategyDecision | None:
-        """Generates a BUY or SELL signal if the price has been rising or falling and crosses a certain threshold.
+        """Generates a BUY or SELL StrategyDecision if the price has been rising or falling and crosses a certain threshold.
 
         Args:
             symbol (str): The symbol for which the market tick is received.
             window (deque[MarketTick]): A deque containing the recent market ticks.
 
         Returns:
-            Signal | None: A buy signal if the conditions are met, otherwise None.
+            StrategyDecision | None: A StrategyDecision if the conditions are met, otherwise None.
         """
         if self._metric:
             self._metric.strategy_evaluations_total.labels(symbol=symbol, strategy=self.NAME).inc()

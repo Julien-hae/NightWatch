@@ -4,7 +4,6 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -25,7 +24,7 @@ class Signal(BaseModel):
     side: Side
     strength: float = Field(ge=0)
     strategy: str = Field(min_length=1)
-    rationale: dict[str, Union[float, Decimal]] = Field(default_factory=dict)
+    rationale: dict[str, float | Decimal] = Field(default_factory=dict)
     source: str
     schema_version: int
 
