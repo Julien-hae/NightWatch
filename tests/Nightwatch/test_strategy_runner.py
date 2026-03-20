@@ -176,7 +176,7 @@ class TestStrategyRunner(unittest.TestCase):
         self.assertIsNotNone(signal_b)
         self.assertEqual(signal_a.side, "BUY")  # type: ignore[union-attr]
         self.assertEqual(signal_b.side, "BUY")  # type: ignore[union-attr]
-        self.assertEqual(runner.get_suppressed_signal_totals(reason="cooldown"), 1.0)
+        self.assertEqual(metric.get_counter_value(metric.signals_suppressed_total, reason="cooldown"), 1.0)
 
     def test_signals_total(self) -> None:
         """Test that the counter signals_total is incremented correctly."""

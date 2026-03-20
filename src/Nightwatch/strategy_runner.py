@@ -70,21 +70,3 @@ class StrategyRunner:
             if self._metric:
                 self._metric.signals_total.labels(symbol=tick.symbol, side=signal.side.value, strategy=signal.strategy).inc()
         return signal
-
-    def get_signal_totals(self, **labels: str) -> float | None:
-        """Return the total number of signals emitted by the strategy."""
-        if self._metric:
-            if "strategy" in labels:
-                return self._metric.get_counter_value(self._metric.signals_total, **labels)
-            return self._metric.get_counter_value(
-                self._metric.signals_total,
-                strategy=self._strategy.NAME,
-                **labels,
-            )
-        return None
-
-    def get_suppressed_signal_totals(self, **labels: str) -> float | None:
-        """Return the total number of signals suppressed by the strategy."""
-        if self._metric:
-            return self._metric.get_counter_value(self._metric.signals_suppressed_total, **labels)
-        return None
