@@ -36,7 +36,7 @@ class StrategyRunner:
             LOGGER.info("Received first tick for symbol %s: %s", tick.symbol, tick.uid)
             return None
         last_signal = self._last_signal_time.get(tick.symbol, None)
-        if last_signal is not None and tick.timestamp - last_signal <= self._cooldown:
+        if last_signal is not None and tick.timestamp - last_signal < self._cooldown:
             if self._metric:
                 self._metric.signals_suppressed_total.labels(reason="cooldown").inc()
             LOGGER.debug("Tick for symbol %s received during cooldown period: %s", tick.symbol, tick)

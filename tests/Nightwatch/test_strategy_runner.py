@@ -66,10 +66,10 @@ class TestStrategyRunner(unittest.TestCase):
         self.assertIsNotNone(signal)
         self.assertEqual(signal.side, "BUY")  # type: ignore[union-attr]
 
-        next_tick = make_tick(price=Decimal("130"), timestamp=self.start_time + timedelta(seconds=15))
+        next_tick = make_tick(price=Decimal("130"), timestamp=self.start_time + timedelta(seconds=11))
         second_signal_no_cd = runner_no_cd.on_market_tick(next_tick)
         self.assertIsNotNone(second_signal_no_cd)
-        self.assertEqual(second_signal_no_cd.side, "BUY")
+        self.assertEqual(second_signal_no_cd.side, "BUY")  # type: ignore[union-attr]
 
         strategy_cd = MomentumBurstStrategy(threshold_pct=1, window_sec=60, metric=self._metric)
         buffer_cd = TickBuffer(max_ticks_per_symbol=30)
@@ -192,3 +192,24 @@ class TestStrategyRunner(unittest.TestCase):
         feed_ticks(self.runner, ticks)
         final_evaluations = self.runner.get_signal_totals(symbol="BTC/USD", side="BUY") or 0
         self.assertEqual(final_evaluations, initial_evaluations + 1)
+
+    def test_cooldown_zero_does_not_suppress_same_timestamp(self) -> None:
+        """Given cooldown=0, when two qualifying ticks arrive at the same timestamp,
+        then both emit signals (no suppression)."""
+        strategy = MomentumBurstStrategy(threshold_pct=10, metric=self._metric)
+        buffer = TickBuffer(max_ticks_per_symbol=30)
+        runner = StrategyRunner(strategy=strategy, buffer=buffer, cooldown=timedelta(seconds=0), metric=self._metric)
+
+        ticks = deque(
+            [
+                make_tick(price=Decimal("100"), timestamp=self.start_time),
+                make_tick(price=Decimal("115"), timestamp=self.start_time + timedelta(seconds=10)),
+            ]
+        )
+        signal1 = feed_ticks(runner, ticks)
+        self.assertIsNotNone(signal1)
+
+        # Same timestamp, still qualifying
+        tick_at_boundary = make_tick(price=Decimal("135"), timestamp=self.start_time + timedelta(seconds=10))
+        signal2 = runner.on_market_tick(tick_at_boundary)
+        self.assertIsNotNone(signal2)  # Should NOT be suppressed with cooldown=0
