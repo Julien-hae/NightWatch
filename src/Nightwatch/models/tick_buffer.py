@@ -1,5 +1,6 @@
 """Defines the TickBuffer Pydantic model for storing the last N MarketTick objects per symbol in a rolling buffer."""
 
+import logging
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 
@@ -7,6 +8,8 @@ from pydantic import ConfigDict, Field
 from pydantic.dataclasses import dataclass
 
 from Nightwatch.models.market_tick import MarketTick
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(config=ConfigDict(str_max_length=255))
@@ -24,8 +27,22 @@ class TickBuffer:
             self.ticks = defaultdict(lambda: deque(maxlen=self.max_ticks_per_symbol), self.ticks)
 
     def add_tick(self, tick: MarketTick) -> None:
-        """Add a tick to the per-symbol buffer, maintaining a rolling window up to max_ticks_per_symbol."""
-        self.ticks[tick.symbol].append(tick)
+        """Add a tick to the per-symbol buffer, maintaining a rolling window up to max_ticks_per_symbol.
+
+        Ticks must arrive in non-decreasing timestamp order. Out-of-order ticks (where the new
+        tick's timestamp is strictly earlier than the latest stored tick) are discarded with a
+        warning, preserving the sorted-by-timestamp invariant required for bisect-based lookups.
+        """
+        symbol_ticks = self.ticks[tick.symbol]
+        if symbol_ticks and tick.timestamp < symbol_ticks[-1].timestamp:
+            LOGGER.warning(
+                "Discarding out-of-order tick for %s: tick timestamp %s is before latest %s",
+                tick.symbol,
+                tick.timestamp,
+                symbol_ticks[-1].timestamp,
+            )
+            return
+        symbol_ticks.append(tick)
 
     def get_ticks(self, symbol: str) -> deque[MarketTick]:
         """Return the internal deque of ticks for *symbol*, or an empty deque if none are stored.

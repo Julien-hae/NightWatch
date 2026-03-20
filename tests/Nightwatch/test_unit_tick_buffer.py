@@ -50,3 +50,24 @@ class TestTickBuffer(unittest.TestCase):
             buf.add_tick(tick)
         stored = list(buf.get_ticks("BTC/USD"))
         self.assertEqual([t.timestamp for t in stored], timestamps)
+
+    def test_out_of_order_tick_discarded(self) -> None:
+        """Test that a tick with an earlier timestamp than the latest stored tick is discarded."""
+        buf = TickBuffer(max_ticks_per_symbol=5)
+        t0 = datetime(2024, 1, 1, 0, tzinfo=timezone.utc)
+        t1 = datetime(2024, 1, 1, 1, tzinfo=timezone.utc)
+        t_late = datetime(2024, 1, 1, 0, 30, tzinfo=timezone.utc)
+        buf.add_tick(make_tick(symbol="BTC/USD", timestamp=t0))
+        buf.add_tick(make_tick(symbol="BTC/USD", timestamp=t1))
+        buf.add_tick(make_tick(symbol="BTC/USD", timestamp=t_late))
+        stored = list(buf.get_ticks("BTC/USD"))
+        self.assertEqual(len(stored), 2)
+        self.assertEqual([t.timestamp for t in stored], [t0, t1])
+
+    def test_equal_timestamp_tick_accepted(self) -> None:
+        """Test that a tick with a timestamp equal to the latest stored tick is accepted (non-decreasing)."""
+        buf = TickBuffer(max_ticks_per_symbol=5)
+        ts = datetime(2024, 1, 1, 0, tzinfo=timezone.utc)
+        buf.add_tick(make_tick(symbol="BTC/USD", timestamp=ts))
+        buf.add_tick(make_tick(symbol="BTC/USD", timestamp=ts))
+        self.assertEqual(len(buf.get_ticks("BTC/USD")), 2)
