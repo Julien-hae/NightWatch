@@ -1,5 +1,6 @@
 """A trading strategy that generates BUY or SELL signals when price moves beyond a configured percentage threshold."""
 
+import bisect
 import logging
 from collections import deque
 from datetime import timedelta
@@ -50,16 +51,18 @@ class MomentumBurstStrategy(Strategy):
 
         last_tick: MarketTick = window[-1]
         cutoff_timestamp = last_tick.timestamp - timedelta(seconds=self.window_sec)
-        window_in_range = [tick for tick in window if tick.timestamp >= cutoff_timestamp]
-        if len(window_in_range) < 2:  # noqa: PLR2004
+        ticks_list = list(window)
+        idx = bisect.bisect_left(ticks_list, cutoff_timestamp, key=lambda t: t.timestamp)
+        in_range_count = len(ticks_list) - idx
+        if in_range_count < 2:  # noqa: PLR2004
             LOGGER.debug(
                 "Not enough ticks within the last %s seconds to evaluate the strategy for symbol %s. Required: 2, Found: %d",
                 self.window_sec,
                 symbol,
-                len(window_in_range),
+                in_range_count,
             )
             return None
-        start_tick: MarketTick = window_in_range[0]
+        start_tick: MarketTick = ticks_list[idx]
 
         if start_tick.price == Decimal("0"):
             LOGGER.warning("Start tick price is zero for symbol %s, cannot calculate percentage change.", symbol)
