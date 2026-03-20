@@ -1,11 +1,14 @@
 # mypy: disable-error-code="import-untyped"
 """Test fixture for creating MarketTick instances for testing purposes."""
 
+from collections import deque
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 
 from Nightwatch.models.market_tick import MarketTick
+from Nightwatch.models.signal import Signal
+from Nightwatch.strategy_runner import StrategyRunner
 
 
 def make_tick(
@@ -23,3 +26,12 @@ def make_tick(
         schema_version=kwargs.pop("schema_version", 1),
         **kwargs,
     )
+
+
+def feed_ticks(runner: StrategyRunner, ticks: deque[MarketTick]) -> Signal | None:
+    """Feed ticks into the runner, returning the first signal (or None)."""
+    for tick in ticks:
+        signal = runner.on_market_tick(tick)
+        if signal is not None:
+            return signal
+    return None
