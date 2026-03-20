@@ -5,10 +5,10 @@ from collections import deque
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from Nightwatch.metrics import NightwatchMetrics  # type: ignore[import-untyped]
-from Nightwatch.models.tick_buffer import TickBuffer  # type: ignore[import-untyped]
-from Nightwatch.strategies.momentum_burst import MomentumBurstStrategy  # type: ignore[import-untyped]
-from Nightwatch.strategy_runner import StrategyRunner  # type: ignore[import-untyped]
+from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.models.tick_buffer import TickBuffer
+from Nightwatch.strategies.momentum_burst import MomentumBurstStrategy
+from Nightwatch.strategy_runner import StrategyRunner
 from tests.fixtures.tick_factory import feed_ticks, make_tick
 
 
@@ -68,7 +68,7 @@ class TestStrategyRunner(unittest.TestCase):
         next_tick = make_tick(price=Decimal("130"), timestamp=self.start_time + timedelta(seconds=15))
         second_signal_no_cd = runner_no_cd.on_market_tick(next_tick)
         self.assertIsNotNone(second_signal_no_cd)
-        self.assertEqual(second_signal_no_cd.side, "BUY")
+        self.assertEqual(second_signal_no_cd.side, "BUY")  # type: ignore[union-attr]
 
         strategy_cd = MomentumBurstStrategy(threshold_pct=1, window_sec=60, metric=self._metric)
         buffer_cd = TickBuffer(max_ticks_per_symbol=30)
@@ -130,7 +130,6 @@ class TestStrategyRunner(unittest.TestCase):
         strategy = MomentumBurstStrategy(threshold_pct=10, metric=metric)
         buffer = TickBuffer(max_ticks_per_symbol=30)
         runner = StrategyRunner(strategy=strategy, buffer=buffer, cooldown=timedelta(seconds=30), metric=metric)
-
         ticks_symbol = deque(
             [
                 make_tick(price=Decimal("100"), timestamp=self.start_time, symbol="A"),
@@ -157,3 +156,17 @@ class TestStrategyRunner(unittest.TestCase):
         self.assertEqual(signal_a.side, "BUY")  # type: ignore[union-attr]
         self.assertEqual(signal_b.side, "BUY")  # type: ignore[union-attr]
         self.assertEqual(runner.get_suppressed_signal_totals(reason="cooldown"), 1.0)
+
+    def test_signals_total(self) -> None:
+        """Test that the counter strategy_evaluations_total is incremented correctly."""
+        initial_evaluations = self.runner.get_signal_totals(symbol="BTC/USD", side="BUY") or 0
+        ticks = deque(
+            [
+                make_tick(price=Decimal("100"), timestamp=self.start_time),
+                make_tick(price=Decimal("115"), timestamp=self.start_time + timedelta(seconds=10)),
+                make_tick(price=Decimal("135"), timestamp=self.start_time + timedelta(seconds=20)),
+            ]
+        )
+        feed_ticks(self.runner, ticks)
+        final_evaluations = self.runner.get_signal_totals(symbol="BTC/USD", side="BUY") or 0
+        self.assertEqual(final_evaluations, initial_evaluations + 1)

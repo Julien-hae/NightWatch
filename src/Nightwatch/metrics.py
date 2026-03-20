@@ -85,11 +85,6 @@ class NightwatchMetrics:
         for metric in counter.collect():
             for sample in metric.samples:
                 sample_labels = getattr(sample, "labels", None)
-                if sample_labels is None:
-                    sample_labels = sample[1]
-                if sample_labels == labels:
-                    sample_value = getattr(sample, "value", None)
-                    if sample_value is None:
-                        sample_value = sample[2]
-                    return float(sample_value)
+                if sample_labels is not None and sample_labels == labels:
+                    return sample.value
         return None
