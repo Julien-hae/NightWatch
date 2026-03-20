@@ -10,7 +10,7 @@ from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.tick_buffer import TickBuffer
 from Nightwatch.strategies.momentum_burst import MomentumBurstStrategy
 from Nightwatch.strategy_runner import StrategyRunner
-from tests.fixtures.tick_factory import feed_ticks, make_tick
+from tests.fixtures.tick_factory import feed_ticks, make_tick, make_tick_sequence
 
 
 class TestStrategyRunner(unittest.TestCase):
@@ -25,25 +25,17 @@ class TestStrategyRunner(unittest.TestCase):
 
     def test_emit_signal_on_rising_sequence(self) -> None:
         """Test that a rising sequence of ticks generates a buy signal."""
-        rising_ticks = deque(
-            [
-                make_tick(price=Decimal("100"), timestamp=self.start_time),
-                make_tick(price=Decimal("105"), timestamp=self.start_time + timedelta(seconds=5)),
-                make_tick(price=Decimal("115"), timestamp=self.start_time + timedelta(seconds=10)),
-            ]
+        rising_ticks = make_tick_sequence(
+            prices=[Decimal("100"), Decimal("105"), Decimal("115")], start=self.start_time, interval_sec=5.0, symbol="BTC/USD"
         )
         signal = feed_ticks(self.runner, rising_ticks)
         self.assertIsNotNone(signal)
-        self.assertEqual(signal.side, "BUY")  # type: ignore[union-attr]
+        self.assertEqual(signal.side.value, "BUY")  # type: ignore[union-attr]
 
     def test_emit_no_signal_on_falling_sequence(self) -> None:
         """Test that an outside threshold sequence of ticks does not generate a signal."""
-        failing_ticks = deque(
-            [
-                make_tick(price=Decimal("100"), timestamp=self.start_time),
-                make_tick(price=Decimal("95"), timestamp=self.start_time + timedelta(seconds=5)),
-                make_tick(price=Decimal("105"), timestamp=self.start_time + timedelta(seconds=10)),
-            ]
+        failing_ticks = make_tick_sequence(
+            prices=[Decimal("100"), Decimal("95"), Decimal("105")], start=self.start_time, interval_sec=5.0, symbol="BTC/USD"
         )
         signal = feed_ticks(self.runner, failing_ticks)
         self.assertIsNone(signal)
@@ -54,22 +46,18 @@ class TestStrategyRunner(unittest.TestCase):
         buffer_no_cd = TickBuffer(max_ticks_per_symbol=30)
         runner_no_cd = StrategyRunner(strategy=strategy_no_cd, buffer=buffer_no_cd)
 
-        ticks = deque(
-            [
-                make_tick(price=Decimal("100"), timestamp=self.start_time),
-                make_tick(price=Decimal("105"), timestamp=self.start_time + timedelta(seconds=5)),
-                make_tick(price=Decimal("115"), timestamp=self.start_time + timedelta(seconds=10)),
-            ]
+        ticks = make_tick_sequence(
+            prices=[Decimal("100"), Decimal("105"), Decimal("115")], start=self.start_time, interval_sec=5.0, symbol="BTC/USD"
         )
 
         signal = feed_ticks(runner_no_cd, ticks)
         self.assertIsNotNone(signal)
-        self.assertEqual(signal.side, "BUY")  # type: ignore[union-attr]
+        self.assertEqual(signal.side.value, "BUY")  # type: ignore[union-attr]
 
         next_tick = make_tick(price=Decimal("130"), timestamp=self.start_time + timedelta(seconds=11))
         second_signal_no_cd = runner_no_cd.on_market_tick(next_tick)
         self.assertIsNotNone(second_signal_no_cd)
-        self.assertEqual(second_signal_no_cd.side, "BUY")
+        self.assertEqual(second_signal_no_cd.side.value, "BUY")
 
         strategy_cd = MomentumBurstStrategy(threshold_pct=1, window_sec=60, metric=self._metric)
         buffer_cd = TickBuffer(max_ticks_per_symbol=30)
@@ -82,7 +70,7 @@ class TestStrategyRunner(unittest.TestCase):
             signal = runner_cd.on_market_tick(tick)
             i += 1
         self.assertIsNotNone(signal)
-        self.assertEqual(signal.side, "BUY")  # type: ignore[union-attr]
+        self.assertEqual(signal.side.value, "BUY")  # type: ignore[union-attr]
 
         signal_during_cooldown = runner_cd.on_market_tick(next_tick)
         self.assertIsNone(signal_during_cooldown)
@@ -90,11 +78,9 @@ class TestStrategyRunner(unittest.TestCase):
     def test_cooldown_increments_suppressed_metric(self) -> None:
         """Given a signal was just emitted, when the next tick arrives within cooldown,
         then signals_suppressed_total{reason='cooldown'} increments by 1."""
-        ticks = [
-            make_tick(price=Decimal("100"), timestamp=self.start_time),
-            make_tick(price=Decimal("105"), timestamp=self.start_time + timedelta(seconds=5)),
-            make_tick(price=Decimal("115"), timestamp=self.start_time + timedelta(seconds=10)),
-        ]
+        ticks = make_tick_sequence(
+            prices=[Decimal("100"), Decimal("105"), Decimal("115")], start=self.start_time, interval_sec=5.0, symbol="BTC/USD"
+        )
         for tick in ticks:
             self.runner.on_market_tick(tick)
         suppressed_tick = make_tick(
@@ -104,33 +90,24 @@ class TestStrategyRunner(unittest.TestCase):
         result = self.runner.on_market_tick(suppressed_tick)
 
         self.assertIsNone(result)
-        # THIS is the new assertion — the metric must reflect the suppression
         value = self._metric.get_counter_value(self._metric.signals_suppressed_total, reason="cooldown")
         self.assertEqual(value, 1.0)
 
     def test_integration_with_momentum_burst_strategy(self) -> None:
         """Test that the StrategyRunner correctly integrates with the MomentumBurstStrategy."""
 
-        ticks = deque(
-            [
-                make_tick(price=Decimal("100"), timestamp=self.start_time),
-                make_tick(price=Decimal("105"), timestamp=self.start_time + timedelta(seconds=5)),
-                make_tick(price=Decimal("115"), timestamp=self.start_time + timedelta(seconds=10)),
-            ]
+        ticks = make_tick_sequence(
+            prices=[Decimal("100"), Decimal("105"), Decimal("115")], start=self.start_time, interval_sec=5.0, symbol="BTC/USD"
         )
         signal = feed_ticks(self.runner, ticks)
         self.assertIsNotNone(signal)
-        self.assertEqual(signal.side, "BUY")  # type: ignore[union-attr]
+        self.assertEqual(signal.side.value, "BUY")  # type: ignore[union-attr]
 
     def test_logging_contains_required_fields(self) -> None:
         """Test that the logs contain the required fields when emitting signals."""
         with self.assertLogs("Nightwatch.strategy_runner", level="DEBUG") as log:
-            ticks = deque(
-                [
-                    make_tick(price=Decimal("100"), timestamp=self.start_time),
-                    make_tick(price=Decimal("105"), timestamp=self.start_time + timedelta(seconds=5)),
-                    make_tick(price=Decimal("115"), timestamp=self.start_time + timedelta(seconds=10)),
-                ]
+            ticks = make_tick_sequence(
+                prices=[Decimal("100"), Decimal("105"), Decimal("115")], start=self.start_time, interval_sec=5.0, symbol="BTC/USD"
             )
             for tick in ticks:
                 self.runner.on_market_tick(tick)
@@ -183,12 +160,8 @@ class TestStrategyRunner(unittest.TestCase):
         initial_evaluations = (
             self._metric.get_counter_value(self._metric.signals_total, symbol="BTC/USD", side="BUY", strategy=self.__strategy.NAME) or 0
         )
-        ticks = deque(
-            [
-                make_tick(price=Decimal("100"), timestamp=self.start_time),
-                make_tick(price=Decimal("115"), timestamp=self.start_time + timedelta(seconds=10)),
-                make_tick(price=Decimal("135"), timestamp=self.start_time + timedelta(seconds=20)),
-            ]
+        ticks = make_tick_sequence(
+            prices=[Decimal("100"), Decimal("115"), Decimal("135")], start=self.start_time, interval_sec=10.0, symbol="BTC/USD"
         )
         feed_ticks(self.runner, ticks)
         final_evaluations = (
@@ -202,13 +175,7 @@ class TestStrategyRunner(unittest.TestCase):
         strategy = MomentumBurstStrategy(threshold_pct=10, metric=self._metric)
         buffer = TickBuffer(max_ticks_per_symbol=30)
         runner = StrategyRunner(strategy=strategy, buffer=buffer, cooldown=timedelta(seconds=0), metric=self._metric)
-
-        ticks = deque(
-            [
-                make_tick(price=Decimal("100"), timestamp=self.start_time),
-                make_tick(price=Decimal("115"), timestamp=self.start_time + timedelta(seconds=10)),
-            ]
-        )
+        ticks = make_tick_sequence(prices=[Decimal("100"), Decimal("115")], start=self.start_time, interval_sec=10.0, symbol="BTC/USD")
         signal1 = feed_ticks(runner, ticks)
         self.assertIsNotNone(signal1)
 

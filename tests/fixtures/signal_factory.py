@@ -1,17 +1,18 @@
 """Factory functions to create test instances of the Signal model."""
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any
 
-from Nightwatch.models.signal import Signal  # type: ignore[import-untyped]
+from Nightwatch.models.signal import Side, Signal
 
 
 def make_signal(
     symbol: str = "BTC/USD",
-    side: str = "BUY",
+    side: Side = Side.BUY,
     strength: float = 0.8,
     strategy: str = "Mean Reversion",
-    rationale: dict[str, float] | None = None,
+    rationale: dict[str, float | Decimal] | None = None,
     source: str = "test",
     **kwargs: Any,
 ) -> Signal:
@@ -22,7 +23,7 @@ def make_signal(
         side=side,
         strength=strength,
         strategy=strategy,
-        rationale=rationale or {"delta_pct": 0.05, "window_sec": 3.0, "threshold_pct": 0.02},
+        rationale=rationale or {"delta_pct": Decimal("0.05"), "window_sec": Decimal("3.0"), "threshold_pct": Decimal("0.02")},
         source=source,
         schema_version=kwargs.pop("schema_version", 1),
         **kwargs,

@@ -59,7 +59,7 @@ class StrategyRunner:
                 "event": "signal",
                 "signal_id": str(signal.uid),
                 "symbol": tick.symbol,
-                "side": signal.side,
+                "side": signal.side.value,
                 "strategy": signal.strategy,
                 "delta_pct": signal.rationale.get("delta_pct", None),
                 "window_sec": signal.rationale.get("window_sec", None),
