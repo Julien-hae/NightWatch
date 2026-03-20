@@ -99,5 +99,11 @@ class MomentumBurstStrategy(Strategy):
     def get_strategy_evaluations_total(self, **labels: str) -> float | None:
         """Return the total number of strategy evaluations performed."""
         if self._metric:
-            return self._metric.get_counter_value(self._metric.strategy_evaluations_total, **labels)
+            if "strategy" in labels:
+                return self._metric.get_counter_value(self._metric.strategy_evaluations_total, **labels)
+            return self._metric.get_counter_value(
+                self._metric.strategy_evaluations_total,
+                strategy=self.NAME,
+                **labels,
+            )
         return None

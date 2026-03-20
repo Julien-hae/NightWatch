@@ -66,7 +66,9 @@ class StrategyRunner:
             if "strategy" in labels:
                 return self._metric.get_counter_value(self._metric.signals_total, **labels)
             return self._metric.get_counter_value(
-                self._metric.signals_total, strategy=self._strategy.NAME, **labels  # type: ignore[attr-defined]
+                self._metric.signals_total,
+                strategy=self._strategy.NAME,
+                **labels,
             )
         return None
 

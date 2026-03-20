@@ -10,6 +10,8 @@ from Nightwatch.models.signal import Signal
 class Strategy(ABC):
     """Abstract base class for trading strategies."""
 
+    NAME: str
+
     @abstractmethod
     def on_tick(self, symbol: str, window: deque[MarketTick]) -> Signal | None:
         """Method to be implemented by concrete strategies to handle market ticks.
