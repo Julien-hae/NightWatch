@@ -7,7 +7,8 @@ from decimal import Decimal
 
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
-from Nightwatch.models.signal import Side, Signal
+from Nightwatch.models.signal import Side
+from Nightwatch.models.strategy_decision import StrategyDecision
 from Nightwatch.strategies.strategy import Strategy
 
 LOGGER = logging.getLogger(__name__)
@@ -28,7 +29,7 @@ class MomentumBurstStrategy(Strategy):
         self.threshold_pct = Decimal(str(threshold_pct))
         self._metric = metric
 
-    def on_tick(self, symbol: str, window: deque[MarketTick]) -> Signal | None:
+    def on_tick(self, symbol: str, window: deque[MarketTick]) -> StrategyDecision | None:
         """Generates a BUY or SELL signal if the price has been rising or falling and crosses a certain threshold.
 
         Args:
@@ -81,19 +82,14 @@ class MomentumBurstStrategy(Strategy):
             LOGGER.debug("Delta percentage %s for symbol %s did not cross any threshold.", delta_pct, symbol)
             return None
 
-        return Signal(
-            timestamp=last_tick.timestamp,
-            symbol=symbol,
+        return StrategyDecision(
             side=side,
             strength=float(abs(delta_pct)),
-            strategy=self.NAME,
             rationale={
                 "delta_pct": float(delta_pct),
                 "window_sec": self.window_sec,
                 "threshold_pct": self.threshold_pct,
             },
-            source=last_tick.source,
-            schema_version=last_tick.schema_version,
         )
 
     def get_strategy_evaluations_total(self, **labels: str) -> float | None:

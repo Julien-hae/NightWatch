@@ -42,8 +42,19 @@ class StrategyRunner:
             LOGGER.debug("Tick for symbol %s received during cooldown period: %s", tick.symbol, tick)
             return None
 
-        signal = self._strategy.on_tick(symbol=tick.symbol, window=self._buffer.get_ticks(tick.symbol))
-        if signal:
+        strategy_decision = self._strategy.on_tick(symbol=tick.symbol, window=self._buffer.get_ticks(tick.symbol))
+        signal = None
+        if strategy_decision:
+            signal = Signal(
+                timestamp=tick.timestamp,
+                symbol=tick.symbol,
+                side=strategy_decision.side,
+                strength=strategy_decision.strength,
+                strategy=self._strategy.NAME,
+                rationale=strategy_decision.rationale,
+                source=tick.source,
+                schema_version=tick.schema_version,
+            )
             log = {
                 "event": "signal",
                 "signal_id": str(signal.uid),

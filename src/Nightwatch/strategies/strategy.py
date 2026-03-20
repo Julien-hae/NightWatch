@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from collections import deque
 
 from Nightwatch.models.market_tick import MarketTick
-from Nightwatch.models.signal import Signal
+from Nightwatch.models.strategy_decision import StrategyDecision
 
 
 class Strategy(ABC):
@@ -13,7 +13,7 @@ class Strategy(ABC):
     NAME: str
 
     @abstractmethod
-    def on_tick(self, symbol: str, window: deque[MarketTick]) -> Signal | None:
+    def on_tick(self, symbol: str, window: deque[MarketTick]) -> StrategyDecision | None:
         """Method to be implemented by concrete strategies to handle market ticks.
 
         Args:
