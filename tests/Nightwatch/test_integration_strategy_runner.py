@@ -53,8 +53,8 @@ class TestSignalsTotalViaNats(unittest.TestCase):
         cls.subscriber = MarketTickSubscriber(config=nats_cfg, metrics=cls.metrics)
         cls.loop.run_until_complete(cls.subscriber.connect())
 
-        cls.strategy = MomentumBurstStrategy(threshold_pct=0.01, metric=cls.metrics)
-        cls.buffer = TickBuffer(max_ticks_per_symbol=30)
+        cls.strategy = MomentumBurstStrategy(threshold_pct=0.001, window_sec=30.0, metric=cls.metrics)
+        cls.buffer = TickBuffer(max_ticks_per_symbol=200)
         cls.runner = StrategyRunner(
             strategy=cls.strategy,
             buffer=cls.buffer,
@@ -103,7 +103,7 @@ class TestSignalsTotalViaNats(unittest.TestCase):
 
             # Flush remaining messages and give subscriber time to process.
             await self.publisher.client.flush()
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(2.0)
 
         self._run(_test())
 
