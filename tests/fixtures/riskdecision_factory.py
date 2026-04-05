@@ -2,7 +2,7 @@
 
 import uuid
 
-from Nightwatch.models.risk_decision import RiskDecision  # type: ignore[import-untyped]
+from Nightwatch.models.risk_decision import RiskDecision
 
 
 def make_risk_decision(
