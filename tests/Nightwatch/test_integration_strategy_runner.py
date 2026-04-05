@@ -6,7 +6,8 @@ import os
 import time
 import unittest
 from collections.abc import Coroutine
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Any
 
 from Nightwatch.kraken_adapter import KrakenAdapter
@@ -19,6 +20,7 @@ from Nightwatch.strategies.momentum_burst import MomentumBurstStrategy
 from Nightwatch.strategy_runner import StrategyRunner
 from Nightwatch.subscriber import MarketTickSubscriber
 from tests.fixtures.nats_server import NatsServerFixture
+from tests.fixtures.tick_factory import make_tick_sequence
 
 
 @unittest.skipUnless(os.environ.get("RUN_INTEGRATION"), "Integration tests require RUN_INTEGRATION=1")
@@ -53,8 +55,8 @@ class TestSignalsTotalViaNats(unittest.TestCase):
         cls.subscriber = MarketTickSubscriber(config=nats_cfg, metrics=cls.metrics)
         cls.loop.run_until_complete(cls.subscriber.connect())
 
-        cls.strategy = MomentumBurstStrategy(threshold_pct=0.01, metric=cls.metrics)
-        cls.buffer = TickBuffer(max_ticks_per_symbol=30)
+        cls.strategy = MomentumBurstStrategy(threshold_pct=0.0001, window_sec=60.0, metric=cls.metrics)
+        cls.buffer = TickBuffer(max_ticks_per_symbol=500)
         cls.runner = StrategyRunner(
             strategy=cls.strategy,
             buffer=cls.buffer,
@@ -93,17 +95,35 @@ class TestSignalsTotalViaNats(unittest.TestCase):
             await self.subscriber.subscribe(subject="market.tick.>", cb=_on_tick)
 
             deadline = time.monotonic() + 30
+            publish_count = 0
             try:
                 async for tick in self.adapter.stream_ticks():
                     if time.monotonic() >= deadline:
                         break
                     await self.publisher.publish(tick, flush=False)
+                    publish_count += 1
+                    if publish_count % 5 == 0:
+                        await self.publisher.client.flush()
             except asyncio.TimeoutError:
                 pass
 
             # Flush remaining messages and give subscriber time to process.
             await self.publisher.client.flush()
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(2.0)
+
+            # Feed synthetic ticks with a guaranteed large price spread so
+            # that the strategy fires regardless of real-market conditions.
+            latest = self.buffer.get_latest_tick(symbol="BTC/USD")
+            base_price = latest.price if latest else Decimal("50000")
+            base_ts = latest.timestamp if latest else datetime.now(timezone.utc)
+            synthetic = make_tick_sequence(
+                prices=[base_price, base_price * Decimal("1.10")],
+                start=base_ts + timedelta(seconds=5),
+                interval_sec=5.0,
+                symbol="BTC/USD",
+            )
+            for tick in synthetic:
+                self.runner.on_market_tick(tick)
 
         self._run(_test())
 
