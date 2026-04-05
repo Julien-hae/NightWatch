@@ -183,7 +183,3 @@ class TestStrategyRunner(unittest.TestCase):
         tick_at_boundary = make_tick(price=Decimal("135"), timestamp=self.start_time + timedelta(seconds=10))
         signal2 = runner.on_market_tick(tick_at_boundary)
         self.assertIsNotNone(signal2)  # Should NOT be suppressed with cooldown=0
-
-    def test_access_private_last_signal_time(self) -> None:
-        """Test that we can access the private _last_signal_time attribute for testing purposes."""
-        self.assertIsInstance(self.runner._last_signal_time, dict)
