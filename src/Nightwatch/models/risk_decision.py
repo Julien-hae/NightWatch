@@ -1,18 +1,21 @@
 """Model to represent a risk decision."""
 
 import uuid
+from typing import Any
 
-from pydantic import BaseModel, Field, ValidationInfo, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 
 class RiskDecision(BaseModel):
     """Model to represent a risk decision."""
 
     allowed: bool
-    reason: str | None
-    rule: str | None
+    reason: str | None = None
+    rule: str | None = None
     symbol: str = Field(min_length=1)
     signal_id: uuid.UUID
+
+    model_config = ConfigDict(str_max_length=255)
 
     @field_validator("symbol")
     @classmethod
@@ -24,7 +27,7 @@ class RiskDecision(BaseModel):
 
     @field_validator("reason", "rule", mode="after")
     @classmethod
-    def validate_reason_and_rule(cls, v: str | None, info: ValidationInfo[dict[str, bool]]) -> str | None:
+    def validate_reason_and_rule(cls, v: str | None, info: ValidationInfo[dict[str, Any]]) -> str | None:
         """Ensure that reason and rule are set according to allowed."""
         allowed = info.data.get("allowed")
         if allowed is False and v is None:

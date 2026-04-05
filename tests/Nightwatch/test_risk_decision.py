@@ -2,11 +2,11 @@
 
 import unittest
 
-from tests.fixtures.riskdecision_factory import make_risk_decision
+from tests.fixtures.risk_decision_factory import make_risk_decision
 
 
-class TestSignal(unittest.TestCase):
-    """Unit tests for the Signal model."""
+class TestRiskDecision(unittest.TestCase):
+    """Unit tests for the RiskDecision model."""
 
     def test_true_decision_implies_fields_are_none(self) -> None:
         """Test that when allowed is True, reason and rule are None."""
@@ -14,6 +14,11 @@ class TestSignal(unittest.TestCase):
         self.assertTrue(risk_decision.allowed)
         self.assertIsNone(risk_decision.reason)
         self.assertIsNone(risk_decision.rule)
+
+    def test_non_blank_symbol(self) -> None:
+        """Test that the symbol field cannot be blank or just whitespace."""
+        with self.assertRaises(ValueError):
+            make_risk_decision(symbol="   ")
 
     def test_false_decision_requires_reason_and_rule(self) -> None:
         """Test that when allowed is False, reason and rule are provided."""

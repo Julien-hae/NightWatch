@@ -8,8 +8,10 @@ from Nightwatch.models.strategy_decision import StrategyDecision
 from Nightwatch.strategies.strategy import Strategy
 
 
-class NoneStrategy(Strategy):  # type: ignore[misc]
+class NoneStrategy(Strategy):
     """A concrete implementation of the Strategy class for testing purposes."""
+
+    NAME = "none_strategy"
 
     def __init__(self) -> None:
         """Initialize the Strategy class."""
