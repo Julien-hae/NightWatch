@@ -1,9 +1,12 @@
-# mypy: disable-error-code="union-attr"
+# mypy: disable-error-code="union-attr, import-untyped"
 """Unit tests for the rules in the Nightwatch application."""
 
+import os
+import time
 import unittest
 
 from Nightwatch.rules.cooldown_rule import CooldownRule
+from Nightwatch.rules.max_signal_per_minute_rule import MaxSignalPerMinuteRule
 from Nightwatch.rules.min_trade_strenght_rule import MinTradeStrengthRule
 from Nightwatch.rules.risk_rule import RiskRule
 from tests.fixtures.signal_factory import make_signal
@@ -17,11 +20,12 @@ class TestRules(unittest.TestCase):
         self.signal = make_signal()
         self.cooldown_rule = CooldownRule(cooldown_seconds=9999.0)
         self.min_trade_strength_rule = MinTradeStrengthRule(min_strength=80.0)
+        self.max_signal_per_minute_rule = MaxSignalPerMinuteRule(max_signals_per_min=2)
 
     def test_cannot_instantiate_directly(self) -> None:
         """Given RiskRule is abstract, When instantiated, Then TypeError."""
         with self.assertRaises(TypeError):
-            RiskRule()  # type: ignore
+            RiskRule()  # type: ignore[abstract]
 
     def test_cooldown_rule_blocks_signal_within_cooldown(self) -> None:
         """Test that CooldownRule blocks a second signal within the cooldown period."""
@@ -45,11 +49,40 @@ class TestRules(unittest.TestCase):
 
     def test_cooldown_expired_allows_signal(self) -> None:
         """Test that CooldownRule allows a signal after the cooldown period has expired."""
-        decision1 = self.cooldown_rule.evaluate(self.signal)
-        self.assertIsNone(decision1)  # First signal should be allowed
+        cooldown = CooldownRule(cooldown_seconds=1.0)
+        first_decision = cooldown.evaluate(self.signal)
+        rejected_decision = cooldown.evaluate(self.signal)
+        time.sleep(cooldown._cooldown_seconds)
+        approved_decision = cooldown.evaluate(self.signal)
 
-        # Simulate cooldown expiration by clearing the internal state
-        self.cooldown_rule._last_seen.clear()
+        self.assertIsNone(first_decision)
+        self.assertIsNotNone(rejected_decision)
+        self.assertIsNone(approved_decision)
 
-        decision2 = self.cooldown_rule.evaluate(self.signal)
-        self.assertIsNone(decision2)  # Second signal should now be allowed
+    def test_max_signal_per_minute_rule_blocks_excess_signals(self) -> None:
+        """Test that MaxSignalPerMinuteRule blocks signals after the maximum per minute is exceeded."""
+
+        decision1 = self.max_signal_per_minute_rule.evaluate(self.signal)
+        decision2 = self.max_signal_per_minute_rule.evaluate(self.signal)
+        decision3 = self.max_signal_per_minute_rule.evaluate(self.signal)
+
+        self.assertIsNone(decision1)
+        self.assertIsNone(decision2)
+        self.assertIsNotNone(decision3)
+        self.assertFalse(decision3.allowed)
+        self.assertEqual(decision3.reason, "Exceeded max signals per minute")
+        self.assertEqual(decision3.rule, "MaxSignalPerMinuteRule")
+
+    @unittest.skipUnless(os.environ.get("RUN_INTEGRATION"), "Integration tests require RUN_INTEGRATION=1")
+    def test_max_signal_per_minute_rule_resets_after_one_minute(self) -> None:
+        """Test that MaxSignalPerMinuteRule resets the count after one minute."""
+        rule = MaxSignalPerMinuteRule(max_signals_per_min=1)
+
+        allowed_decision = rule.evaluate(self.signal)
+        self.assertIsNone(allowed_decision)
+        blocked_decision = rule.evaluate(self.signal)
+        self.assertIsNotNone(blocked_decision)
+
+        time.sleep(61)
+        reset_decision = rule.evaluate(self.signal)
+        self.assertIsNone(reset_decision)
