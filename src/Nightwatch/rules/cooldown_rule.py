@@ -11,7 +11,10 @@ class CooldownRule(RiskRule):
     """Reject signals that arrive too soon after the last allowed signal for the same (symbol, strategy)."""
 
     def __init__(self, cooldown_seconds: float = 30.0) -> None:
-        """Initialize with a cooldown period in seconds."""
+        """Initialize with a non-negative cooldown period in seconds."""
+        if cooldown_seconds < 0:
+            msg = "cooldown_seconds must be greater than or equal to 0"
+            raise ValueError(msg)
         self._cooldown_seconds = cooldown_seconds
         self._last_allowed: dict[tuple[str, str], datetime] = {}
 
