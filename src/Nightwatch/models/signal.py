@@ -22,7 +22,7 @@ class Signal(BaseModel):
     timestamp: datetime
     symbol: str = Field(min_length=1)
     side: Side
-    strength: float = Field(ge=0)
+    strength: float = Field(ge=0, le=100)
     strategy: str = Field(min_length=1)
     rationale: dict[str, float | Decimal] = Field(default_factory=dict)
     source: str
