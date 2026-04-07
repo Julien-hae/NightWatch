@@ -1,9 +1,9 @@
 # mypy: disable-error-code="union-attr, import-untyped"
 """Unit tests for the rules in the Nightwatch application."""
 
-import os
-import time
 import unittest
+from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 from Nightwatch.rules.cooldown_rule import CooldownRule
 from Nightwatch.rules.max_signal_per_minute_rule import MaxSignalPerMinuteRule
@@ -49,11 +49,16 @@ class TestRules(unittest.TestCase):
 
     def test_cooldown_expired_allows_signal(self) -> None:
         """Test that CooldownRule allows a signal after the cooldown period has expired."""
-        cooldown = CooldownRule(cooldown_seconds=1.0)
-        first_decision = cooldown.evaluate(self.signal)
-        rejected_decision = cooldown.evaluate(self.signal)
-        time.sleep(cooldown._cooldown_seconds)
-        approved_decision = cooldown.evaluate(self.signal)
+        t0 = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        cooldown_seconds = 1.0
+        t1 = t0 + timedelta(seconds=cooldown_seconds)
+
+        with patch("Nightwatch.rules.cooldown_rule.datetime") as mock_dt:
+            mock_dt.now.side_effect = [t0, t0, t1]
+            cooldown = CooldownRule(cooldown_seconds=cooldown_seconds)
+            first_decision = cooldown.evaluate(self.signal)
+            rejected_decision = cooldown.evaluate(self.signal)
+            approved_decision = cooldown.evaluate(self.signal)
 
         self.assertIsNone(first_decision)
         self.assertIsNotNone(rejected_decision)
@@ -73,16 +78,19 @@ class TestRules(unittest.TestCase):
         self.assertEqual(decision3.reason, "Exceeded max signals per minute")
         self.assertEqual(decision3.rule, "MaxSignalPerMinuteRule")
 
-    @unittest.skipUnless(os.environ.get("RUN_INTEGRATION"), "Integration tests require RUN_INTEGRATION=1")
     def test_max_signal_per_minute_rule_resets_after_one_minute(self) -> None:
         """Test that MaxSignalPerMinuteRule resets the count after one minute."""
-        rule = MaxSignalPerMinuteRule(max_signals_per_min=1)
+        t0 = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        t1 = t0 + timedelta(seconds=61)
 
-        allowed_decision = rule.evaluate(self.signal)
-        self.assertIsNone(allowed_decision)
-        blocked_decision = rule.evaluate(self.signal)
-        self.assertIsNotNone(blocked_decision)
+        with patch("Nightwatch.rules.max_signal_per_minute_rule.datetime") as mock_dt:
+            mock_dt.now.side_effect = [t0, t0, t1]
+            rule = MaxSignalPerMinuteRule(max_signals_per_min=1)
 
-        time.sleep(61)
-        reset_decision = rule.evaluate(self.signal)
-        self.assertIsNone(reset_decision)
+            allowed_decision = rule.evaluate(self.signal)
+            self.assertIsNone(allowed_decision)
+            blocked_decision = rule.evaluate(self.signal)
+            self.assertIsNotNone(blocked_decision)
+
+            reset_decision = rule.evaluate(self.signal)
+            self.assertIsNone(reset_decision)

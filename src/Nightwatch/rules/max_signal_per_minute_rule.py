@@ -1,8 +1,7 @@
-"""Cooldown risk rule — prevents signal spam for the same symbol+strategy."""
+"""Rate-limit signals per minute for the same symbol and strategy."""
 
 from collections import deque
 from datetime import datetime, timezone
-from typing import Tuple
 
 from Nightwatch.models.risk_decision import RiskDecision
 from Nightwatch.models.signal import Signal
@@ -18,7 +17,7 @@ class MaxSignalPerMinuteRule(RiskRule):
             msg = "max_signals_per_min must be greater than or equal to 0"
             raise ValueError(msg)
         self._max_signals_per_min = max_signals_per_min
-        self._last_seen: dict[tuple[str, str], deque[Tuple[Signal, datetime]]] = {}
+        self._last_seen: dict[tuple[str, str], deque[datetime]] = {}
 
     @property
     def name(self) -> str:
@@ -31,8 +30,8 @@ class MaxSignalPerMinuteRule(RiskRule):
         now = datetime.now(timezone.utc)
         last = self._last_seen.get(key)
 
-        if last is not None:
-            while last and (now - last[0][1]).total_seconds() > 60:  # noqa: PLR2004
+        if last is not None and len(last) >= self._max_signals_per_min:
+            while last and (now - last[0]).total_seconds() > 60:  # noqa: PLR2004
                 last.popleft()
 
             if len(last) >= self._max_signals_per_min:
@@ -48,5 +47,5 @@ class MaxSignalPerMinuteRule(RiskRule):
             last = deque()
             self._last_seen[key] = last
 
-        last.append((signal, now))
+        last.append(now)
         return None
