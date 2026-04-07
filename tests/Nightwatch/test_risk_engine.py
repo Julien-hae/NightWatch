@@ -6,7 +6,7 @@ from Nightwatch.models.risk_decision import RiskDecision
 from Nightwatch.models.risk_engine import RiskEngine
 from Nightwatch.models.signal import Signal
 from Nightwatch.rules.cooldown_rule import CooldownRule
-from Nightwatch.rules.max_trade_size_rule import MaxTradeSizeRule
+from Nightwatch.rules.min_trade_strenght_rule import MinTradeStrengthRule
 from Nightwatch.rules.risk_rule import RiskRule
 from tests.fixtures.signal_factory import make_signal
 
@@ -16,7 +16,7 @@ class TestRiskEngine(unittest.TestCase):
 
     def setUp(self) -> None:
         """Set up common test data."""
-        self.signal = make_signal()
+        self.signal = make_signal(strength=99)
         self.risk_engine = RiskEngine()
 
     def test_evaluate_returns_risk_decision(self) -> None:
@@ -27,14 +27,14 @@ class TestRiskEngine(unittest.TestCase):
     def test_valid_signal_passes_all_rules(self) -> None:
         """Test that a valid signal that does not trigger any rules is allowed."""
         risk_decision = self.risk_engine.evaluate(self.signal)
-        self.assertTrue(risk_decision.allowed)
         self.assertIsNone(risk_decision.reason)
         self.assertIsNone(risk_decision.rule)
+        self.assertTrue(risk_decision.allowed)
 
-    def test_rules_evaluated_in_order_cooldown_before_max_size(self) -> None:
-        """If cooldown and max-size both apply, cooldown wins because it's first."""
-        engine = RiskEngine(rules=[CooldownRule(), MaxTradeSizeRule(max_strength=5.0)])
-        large_signal = make_signal(strength=10.0)
+    def test_rules_evaluated_in_order_cooldown_before_min_strength(self) -> None:
+        """If cooldown and min-strength both apply, cooldown wins because it's first."""
+        engine = RiskEngine(rules=[CooldownRule(), MinTradeStrengthRule(min_strength=0.5)])
+        large_signal = make_signal(strength=1.0)
 
         _ = engine.evaluate(large_signal)
 

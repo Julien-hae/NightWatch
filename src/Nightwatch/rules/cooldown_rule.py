@@ -16,7 +16,7 @@ class CooldownRule(RiskRule):
             msg = "cooldown_seconds must be greater than or equal to 0"
             raise ValueError(msg)
         self._cooldown_seconds = cooldown_seconds
-        self._last_allowed: dict[tuple[str, str], datetime] = {}
+        self._last_seen: dict[tuple[str, str], datetime] = {}
 
     @property
     def name(self) -> str:
@@ -27,7 +27,7 @@ class CooldownRule(RiskRule):
         """Reject if a signal for the same (symbol, strategy) was allowed within cooldown_seconds."""
         key = (signal.symbol, signal.strategy)
         now = datetime.now(timezone.utc)
-        last = self._last_allowed.get(key)
+        last = self._last_seen.get(key)
 
         if last is not None:
             elapsed = (now - last).total_seconds()
@@ -40,5 +40,5 @@ class CooldownRule(RiskRule):
                     rule=self.name,
                 )
 
-        self._last_allowed[key] = now
+        self._last_seen[key] = now
         return None

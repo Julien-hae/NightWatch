@@ -4,7 +4,7 @@
 import unittest
 
 from Nightwatch.rules.cooldown_rule import CooldownRule
-from Nightwatch.rules.max_trade_size_rule import MaxTradeSizeRule
+from Nightwatch.rules.min_trade_strenght_rule import MinTradeStrengthRule
 from Nightwatch.rules.risk_rule import RiskRule
 from tests.fixtures.signal_factory import make_signal
 
@@ -15,8 +15,8 @@ class TestRules(unittest.TestCase):
     def setUp(self) -> None:
         """Set up common test data."""
         self.signal = make_signal()
-        self.cooldown_rule = CooldownRule(cooldown_seconds=1.0)
-        self.max_trade_size_rule = MaxTradeSizeRule(max_strength=5.0)
+        self.cooldown_rule = CooldownRule(cooldown_seconds=9999.0)
+        self.min_trade_strength_rule = MinTradeStrengthRule(min_strength=80.0)
 
     def test_cannot_instantiate_directly(self) -> None:
         """Given RiskRule is abstract, When instantiated, Then TypeError."""
@@ -34,11 +34,22 @@ class TestRules(unittest.TestCase):
         self.assertEqual(decision2.reason, "Cooldown active")
         self.assertEqual(decision2.rule, "CooldownRule")
 
-    def test_max_trade_size_rule_blocks_large_signal(self) -> None:
-        """Test that MaxTradeSizeRule blocks a signal with strength above the maximum."""
-        large_signal = make_signal(strength=10.0)
-        decision = self.max_trade_size_rule.evaluate(large_signal)
+    def test_min_trade_strength_rule_blocks_weak_signal(self) -> None:
+        """Test that MinTradeStrengthRule blocks a signal with strength below the minimum."""
+        weak_signal = make_signal(strength=1.0)
+        decision = self.min_trade_strength_rule.evaluate(weak_signal)
         self.assertIsNotNone(decision)  # Signal should be blocked
         self.assertFalse(decision.allowed)
-        self.assertEqual(decision.reason, "Trade size exceeds maximum")
-        self.assertEqual(decision.rule, "MaxTradeSizeRule")
+        self.assertEqual(decision.reason, "Trade strength below minimum")
+        self.assertEqual(decision.rule, "MinTradeStrengthRule")
+
+    def test_cooldown_expired_allows_signal(self) -> None:
+        """Test that CooldownRule allows a signal after the cooldown period has expired."""
+        decision1 = self.cooldown_rule.evaluate(self.signal)
+        self.assertIsNone(decision1)  # First signal should be allowed
+
+        # Simulate cooldown expiration by clearing the internal state
+        self.cooldown_rule._last_seen.clear()
+
+        decision2 = self.cooldown_rule.evaluate(self.signal)
+        self.assertIsNone(decision2)  # Second signal should now be allowed

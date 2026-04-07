@@ -3,7 +3,7 @@
 from Nightwatch.models.risk_decision import RiskDecision
 from Nightwatch.models.signal import Signal
 from Nightwatch.rules.cooldown_rule import CooldownRule
-from Nightwatch.rules.max_trade_size_rule import MaxTradeSizeRule
+from Nightwatch.rules.min_trade_strenght_rule import MinTradeStrengthRule
 from Nightwatch.rules.risk_rule import RiskRule
 
 
@@ -19,9 +19,9 @@ class RiskEngine:
 
         Args:
             rules: Rules to evaluate, in order. Defaults to
-                   [CooldownRule(), MaxTradeSizeRule()] if not provided.
+                   [CooldownRule(), MinTradeStrengthRule()] if not provided.
         """
-        self._rules = rules if rules is not None else [CooldownRule(), MaxTradeSizeRule()]
+        self._rules = rules if rules is not None else [CooldownRule(), MinTradeStrengthRule()]
 
     def evaluate(self, signal: Signal) -> RiskDecision:
         """Evaluate a trading signal against all rules, short-circuiting on first rejection."""

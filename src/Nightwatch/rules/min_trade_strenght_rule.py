@@ -5,26 +5,26 @@ from Nightwatch.models.signal import Signal
 from Nightwatch.rules.risk_rule import RiskRule
 
 
-class MaxTradeSizeRule(RiskRule):
-    """Reject signals where strength exceeds a configured maximum."""
+class MinTradeStrengthRule(RiskRule):
+    """Reject signals where strength is below a configured minimum."""
 
-    def __init__(self, max_strength: float = 10.0) -> None:
-        """Initialize with the maximum allowed signal strength."""
-        self._max_strength = max_strength
+    def __init__(self, min_strength: float = 10.0) -> None:
+        """Initialize with the minimum allowed signal strength."""
+        self._min_strength = min_strength
 
     @property
     def name(self) -> str:
         """Return the rule name."""
-        return "MaxTradeSizeRule"
+        return "MinTradeStrengthRule"
 
     def evaluate(self, signal: Signal) -> RiskDecision | None:
-        """Reject if signal.strength exceeds max_strength."""
-        if signal.strength > self._max_strength:
+        """Reject if signal.strength is below min_strength."""
+        if signal.strength < self._min_strength:
             return RiskDecision(
                 allowed=False,
                 symbol=signal.symbol,
                 signal_id=signal.uid,
-                reason="Trade size exceeds maximum",
+                reason="Trade strength below minimum",
                 rule=self.name,
             )
         return None
