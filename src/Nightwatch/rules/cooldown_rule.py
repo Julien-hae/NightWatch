@@ -1,0 +1,41 @@
+"""Cooldown risk rule — prevents signal spam for the same symbol+strategy."""
+
+from datetime import datetime, timezone
+
+from Nightwatch.models.risk_decision import RiskDecision
+from Nightwatch.models.signal import Signal
+from Nightwatch.rules.risk_rule import RiskRule
+
+
+class CooldownRule(RiskRule):
+    """Reject signals that arrive too soon after the last allowed signal for the same (symbol, strategy)."""
+
+    def __init__(self, cooldown_seconds: float = 30.0) -> None:
+        """Initialize with a cooldown period in seconds."""
+        self._cooldown_seconds = cooldown_seconds
+        self._last_allowed: dict[tuple[str, str], datetime] = {}
+
+    @property
+    def name(self) -> str:
+        """Return the rule name."""
+        return "CooldownRule"
+
+    def evaluate(self, signal: Signal) -> RiskDecision | None:
+        """Reject if a signal for the same (symbol, strategy) was allowed within cooldown_seconds."""
+        key = (signal.symbol, signal.strategy)
+        now = datetime.now(timezone.utc)
+        last = self._last_allowed.get(key)
+
+        if last is not None:
+            elapsed = (now - last).total_seconds()
+            if elapsed < self._cooldown_seconds:
+                return RiskDecision(
+                    allowed=False,
+                    symbol=signal.symbol,
+                    signal_id=signal.uid,
+                    reason="Cooldown active",
+                    rule=self.name,
+                )
+
+        self._last_allowed[key] = now
+        return None
