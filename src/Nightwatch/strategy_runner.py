@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
+from Nightwatch.models.risk_engine import RiskEngine
 from Nightwatch.models.signal import Signal
 from Nightwatch.models.tick_buffer import TickBuffer
 from Nightwatch.strategies.strategy import Strategy
@@ -17,7 +18,12 @@ class StrategyRunner:
     """Manages the execution of a trading strategy, including buffering ticks and enforcing cooldowns."""
 
     def __init__(
-        self, strategy: Strategy, buffer: TickBuffer, cooldown: timedelta = timedelta(seconds=0), metric: NightwatchMetrics | None = None
+        self,
+        strategy: Strategy,
+        buffer: TickBuffer,
+        cooldown: timedelta = timedelta(seconds=0),
+        metric: NightwatchMetrics | None = None,
+        risk_engine: RiskEngine | None = None,
     ) -> None:
         """Initializes the StrategyRunner with the given strategy, tick buffer, cooldown period, and optional metrics."""
         self._cooldown = cooldown
@@ -25,6 +31,7 @@ class StrategyRunner:
         self._buffer = buffer
         self._metric = metric
         self._last_signal_time: dict[str, datetime] = {}
+        self._risk_engine = risk_engine if risk_engine else RiskEngine()
 
     def on_market_tick(self, tick: MarketTick) -> Signal | None:
         """Process a market tick and determine if a trading signal should be emitted."""
@@ -69,4 +76,18 @@ class StrategyRunner:
             self._last_signal_time[tick.symbol] = tick.timestamp
             if self._metric:
                 self._metric.signals_total.labels(symbol=tick.symbol, side=signal.side.value, strategy=signal.strategy).inc()
+
+        if signal:
+            risk_decision = self._risk_engine.evaluate(signal)
+            if not risk_decision.allowed:
+                if self._metric:
+                    self._metric.signals_suppressed_total.labels(reason=risk_decision.reason).inc()
+                LOGGER.info(
+                    "Signal %s for symbol %s rejected by rule %s: %s",
+                    signal.uid,
+                    signal.symbol,
+                    risk_decision.rule,
+                    risk_decision.reason,
+                )
+                return None
         return signal
