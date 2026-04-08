@@ -14,8 +14,10 @@ from Nightwatch.kraken_adapter import KrakenAdapter
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.nats_config import NatsConnectionConfig
+from Nightwatch.models.risk_engine import RiskEngine
 from Nightwatch.models.tick_buffer import TickBuffer
 from Nightwatch.publisher import MarketTickPublisher
+from Nightwatch.rules.min_trade_strength_rule import MinTradeStrengthRule
 from Nightwatch.strategies.momentum_burst import MomentumBurstStrategy
 from Nightwatch.strategy_runner import StrategyRunner
 from Nightwatch.subscriber import MarketTickSubscriber
@@ -150,3 +152,58 @@ class TestSignalsTotalViaNats(unittest.TestCase):
         self.assertGreater(
             signal_suppressed_after, signal_suppressed_before, "signal_suppressed_total should have increased after 30 s of live ticks"
         )
+
+    def test_risk_engine_rejects_signals_through_nats_pipeline(self) -> None:
+        """Publish synthetic ticks through NATS with a restrictive risk engine and verify rejection metrics."""
+        symbol = "BTC/USD"
+        metric = NightwatchMetrics()
+        strategy = MomentumBurstStrategy(threshold_pct=0.0001, window_sec=60.0, metric=metric)
+        buffer = TickBuffer(max_ticks_per_symbol=500)
+        risk_engine = RiskEngine(rules=[MinTradeStrengthRule(min_strength=99.0)])
+        runner = StrategyRunner(
+            strategy=strategy,
+            buffer=buffer,
+            cooldown=timedelta(seconds=0),
+            metric=metric,
+            risk_engine=risk_engine,
+        )
+
+        async def _test() -> None:
+            nats_cfg = NatsConnectionConfig(servers=[self.nats.url])
+            sub = MarketTickSubscriber(config=nats_cfg, metrics=metric)
+            await sub.connect()
+
+            async def _on_tick(tick: MarketTick) -> None:
+                runner.on_market_tick(tick)
+
+            await sub.subscribe(subject="market.tick.>", cb=_on_tick)
+
+            base_ts = datetime.now(timezone.utc)
+            synthetic = make_tick_sequence(
+                prices=[Decimal("50000"), Decimal("55001")],
+                start=base_ts,
+                interval_sec=5.0,
+                symbol=symbol,
+            )
+            for tick in synthetic:
+                await self.publisher.publish(tick, flush=True)
+
+            timeout_at = time.monotonic() + 5.0
+            while True:
+                suppressed_total = metric.get_counter_value(metric.signals_suppressed_total, reason="MinTradeStrengthRule") or 0.0
+                if suppressed_total > 0.0:
+                    break
+                if time.monotonic() >= timeout_at:
+                    self.fail("Timed out waiting for suppressed signals to be recorded")
+                await asyncio.sleep(0.05)
+            await sub.close()
+
+        self._run(_test())
+
+        signals_total = (metric.get_counter_value(metric.signals_total, symbol=symbol, side="BUY", strategy=strategy.NAME) or 0.0) + (
+            metric.get_counter_value(metric.signals_total, symbol=symbol, side="SELL", strategy=strategy.NAME) or 0.0
+        )
+        suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="MinTradeStrengthRule") or 0.0
+
+        self.assertGreater(signals_total, 0.0, "Strategy should fire at least once through NATS pipeline")
+        self.assertGreater(suppressed, 0.0, "Risk engine should suppress signals below min strength")

@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from Nightwatch.rules.cooldown_rule import CooldownRule
 from Nightwatch.rules.max_signal_per_minute_rule import MaxSignalPerMinuteRule
-from Nightwatch.rules.min_trade_strenght_rule import MinTradeStrengthRule
+from Nightwatch.rules.min_trade_strength_rule import MinTradeStrengthRule
 from Nightwatch.rules.risk_rule import RiskRule
 from tests.fixtures.signal_factory import make_signal
 
