@@ -62,6 +62,21 @@ class StrategyRunner:
                 source=tick.source,
                 schema_version=tick.schema_version,
             )
+            if signal:
+                if self._metric:
+                    self._metric.signals_total.labels(symbol=tick.symbol, side=signal.side.value, strategy=signal.strategy).inc()
+                risk_decision = self._risk_engine.evaluate(signal)
+                if not risk_decision.allowed:
+                    if self._metric:
+                        self._metric.signals_suppressed_total.labels(reason=risk_decision.rule).inc()
+                    LOGGER.info(
+                        "Signal %s for symbol %s rejected by rule %s: %s",
+                        signal.uid,
+                        signal.symbol,
+                        risk_decision.rule,
+                        risk_decision.reason,
+                    )
+                    return None
             log = {
                 "event": "signal",
                 "signal_id": str(signal.uid),
@@ -74,20 +89,4 @@ class StrategyRunner:
             }
             LOGGER.info(json.dumps(log, default=str))
             self._last_signal_time[tick.symbol] = tick.timestamp
-            if self._metric:
-                self._metric.signals_total.labels(symbol=tick.symbol, side=signal.side.value, strategy=signal.strategy).inc()
-
-        if signal:
-            risk_decision = self._risk_engine.evaluate(signal)
-            if not risk_decision.allowed:
-                if self._metric:
-                    self._metric.signals_suppressed_total.labels(reason=risk_decision.reason).inc()
-                LOGGER.info(
-                    "Signal %s for symbol %s rejected by rule %s: %s",
-                    signal.uid,
-                    signal.symbol,
-                    risk_decision.rule,
-                    risk_decision.reason,
-                )
-                return None
         return signal

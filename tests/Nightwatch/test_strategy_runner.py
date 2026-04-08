@@ -11,7 +11,7 @@ from Nightwatch.models.risk_engine import RiskEngine
 from Nightwatch.models.tick_buffer import TickBuffer
 from Nightwatch.rules.cooldown_rule import CooldownRule
 from Nightwatch.rules.max_signal_per_minute_rule import MaxSignalPerMinuteRule
-from Nightwatch.rules.min_trade_strenght_rule import MinTradeStrengthRule
+from Nightwatch.rules.min_trade_strength_rule import MinTradeStrengthRule
 from Nightwatch.strategies.momentum_burst import MomentumBurstStrategy
 from Nightwatch.strategy_runner import StrategyRunner
 from tests.fixtures.tick_factory import feed_ticks, make_tick, make_tick_sequence
@@ -225,9 +225,8 @@ class TestStrategyRunner(unittest.TestCase):
         )
         feed_ticks(runner, ticks)
 
-        suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="Trade strength below minimum") or 0.0
+        suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="MinTradeStrengthRule") or 0.0
         self.assertEqual(suppressed, 1.0)
-        # signals_total should still be incremented (strategy fired before risk engine rejected)
         signals = metric.get_counter_value(metric.signals_total, symbol="BTC/USD", side="BUY", strategy=strategy.NAME) or 0.0
         self.assertEqual(signals, 1.0)
 
@@ -268,7 +267,7 @@ class TestStrategyRunner(unittest.TestCase):
         signal2 = runner.on_market_tick(tick2)
         self.assertIsNone(signal2)
 
-        suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="Exceeded max signals per minute") or 0.0
+        suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="MaxSignalPerMinuteRule") or 0.0
         self.assertEqual(suppressed, 1.0)
 
     def test_risk_engine_allows_signal_when_rules_pass(self) -> None:
@@ -287,7 +286,7 @@ class TestStrategyRunner(unittest.TestCase):
         self.assertIsNotNone(signal)
         self.assertEqual(signal.side.value, "BUY")  # type: ignore[union-attr]
 
-        suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="Trade strength below minimum") or 0.0
+        suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="MinTradeStrengthRule") or 0.0
         self.assertEqual(suppressed, 0.0)
 
     def test_default_risk_engine_rejects_low_strength(self) -> None:
@@ -303,7 +302,7 @@ class TestStrategyRunner(unittest.TestCase):
         signal = feed_ticks(runner, ticks)
         self.assertIsNone(signal)
 
-        suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="Trade strength below minimum") or 0.0
+        suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="MinTradeStrengthRule") or 0.0
         self.assertEqual(suppressed, 1.0)
 
     def test_risk_engine_multiple_rules_first_rejection_wins(self) -> None:
@@ -319,14 +318,14 @@ class TestStrategyRunner(unittest.TestCase):
         ticks = make_tick_sequence(prices=[Decimal("100"), Decimal("115")], start=self.start_time, interval_sec=5.0, symbol="BTC/USD")
         signal1 = feed_ticks(runner, ticks)
         self.assertIsNone(signal1)
-        min_suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="Trade strength below minimum") or 0.0
+        min_suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="MinTradeStrengthRule") or 0.0
         self.assertEqual(min_suppressed, 1.0)
 
         # Second signal: CooldownRule rejects first (within 999s), MinTradeStrengthRule never reached
         tick2 = make_tick(price=Decimal("135"), timestamp=self.start_time + timedelta(seconds=10))
         runner.on_market_tick(tick2)
-        cooldown_suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="Cooldown active") or 0.0
+        cooldown_suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="CooldownRule") or 0.0
         self.assertEqual(cooldown_suppressed, 1.0)
         # MinTradeStrengthRule count unchanged — proves CooldownRule rejected first
-        min_suppressed_after = metric.get_counter_value(metric.signals_suppressed_total, reason="Trade strength below minimum") or 0.0
+        min_suppressed_after = metric.get_counter_value(metric.signals_suppressed_total, reason="MinTradeStrengthRule") or 0.0
         self.assertEqual(min_suppressed_after, 1.0)

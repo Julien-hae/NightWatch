@@ -4,7 +4,7 @@ from Nightwatch.models.risk_decision import RiskDecision
 from Nightwatch.models.signal import Signal
 from Nightwatch.rules.cooldown_rule import CooldownRule
 from Nightwatch.rules.max_signal_per_minute_rule import MaxSignalPerMinuteRule
-from Nightwatch.rules.min_trade_strenght_rule import MinTradeStrengthRule
+from Nightwatch.rules.min_trade_strength_rule import MinTradeStrengthRule
 from Nightwatch.rules.risk_rule import RiskRule
 
 

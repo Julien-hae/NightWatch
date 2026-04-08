@@ -17,7 +17,7 @@ from Nightwatch.models.nats_config import NatsConnectionConfig
 from Nightwatch.models.risk_engine import RiskEngine
 from Nightwatch.models.tick_buffer import TickBuffer
 from Nightwatch.publisher import MarketTickPublisher
-from Nightwatch.rules.min_trade_strenght_rule import MinTradeStrengthRule
+from Nightwatch.rules.min_trade_strength_rule import MinTradeStrengthRule
 from Nightwatch.strategies.momentum_burst import MomentumBurstStrategy
 from Nightwatch.strategy_runner import StrategyRunner
 from Nightwatch.subscriber import MarketTickSubscriber
@@ -188,7 +188,14 @@ class TestSignalsTotalViaNats(unittest.TestCase):
             for tick in synthetic:
                 await self.publisher.publish(tick, flush=True)
 
-            await asyncio.sleep(1.0)
+            timeout_at = time.monotonic() + 5.0
+            while True:
+                suppressed_total = metric.get_counter_value(metric.signals_suppressed_total, reason="MinTradeStrengthRule") or 0.0
+                if suppressed_total > 0.0:
+                    break
+                if time.monotonic() >= timeout_at:
+                    self.fail("Timed out waiting for suppressed signals to be recorded")
+                await asyncio.sleep(0.05)
             await sub.close()
 
         self._run(_test())
@@ -196,7 +203,7 @@ class TestSignalsTotalViaNats(unittest.TestCase):
         signals_total = (metric.get_counter_value(metric.signals_total, symbol=symbol, side="BUY", strategy=strategy.NAME) or 0.0) + (
             metric.get_counter_value(metric.signals_total, symbol=symbol, side="SELL", strategy=strategy.NAME) or 0.0
         )
-        suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="Trade strength below minimum") or 0.0
+        suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="MinTradeStrengthRule") or 0.0
 
         self.assertGreater(signals_total, 0.0, "Strategy should fire at least once through NATS pipeline")
         self.assertGreater(suppressed, 0.0, "Risk engine should suppress signals below min strength")
