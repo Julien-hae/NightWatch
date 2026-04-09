@@ -14,9 +14,9 @@ from Nightwatch.kraken_adapter import KrakenAdapter
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.nats_config import NatsConnectionConfig
-from Nightwatch.models.risk_engine import RiskEngine
 from Nightwatch.models.tick_buffer import TickBuffer
 from Nightwatch.publisher import MarketTickPublisher
+from Nightwatch.risk_engine import RiskEngine
 from Nightwatch.rules.min_trade_strength_rule import MinTradeStrengthRule
 from Nightwatch.strategies.momentum_burst import MomentumBurstStrategy
 from Nightwatch.strategy_runner import StrategyRunner
@@ -62,7 +62,6 @@ class TestSignalsTotalViaNats(unittest.TestCase):
         cls.runner = StrategyRunner(
             strategy=cls.strategy,
             buffer=cls.buffer,
-            cooldown=timedelta(seconds=1),
             metric=cls.metrics,
         )
 
@@ -163,7 +162,6 @@ class TestSignalsTotalViaNats(unittest.TestCase):
         runner = StrategyRunner(
             strategy=strategy,
             buffer=buffer,
-            cooldown=timedelta(seconds=0),
             metric=metric,
             risk_engine=risk_engine,
         )

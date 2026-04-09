@@ -4,8 +4,8 @@ import unittest
 
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.risk_decision import RiskDecision
-from Nightwatch.models.risk_engine import RiskEngine
 from Nightwatch.models.signal import Signal
+from Nightwatch.risk_engine import RiskEngine
 from Nightwatch.rules.cooldown_rule import CooldownRule
 from Nightwatch.rules.min_trade_strength_rule import MinTradeStrengthRule
 from Nightwatch.rules.risk_rule import RiskRule
