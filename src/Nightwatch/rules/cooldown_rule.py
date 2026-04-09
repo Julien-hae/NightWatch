@@ -1,6 +1,6 @@
 """Cooldown risk rule — prevents signal spam for the same symbol+strategy."""
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from Nightwatch.models.risk_decision import RiskDecision
 from Nightwatch.models.signal import Signal
@@ -26,11 +26,10 @@ class CooldownRule(RiskRule):
     def evaluate(self, signal: Signal) -> RiskDecision | None:
         """Reject if a signal for the same (symbol, strategy) was allowed within cooldown_seconds."""
         key = (signal.symbol, signal.strategy)
-        now = datetime.now(timezone.utc)
         last = self._last_seen.get(key)
 
         if last is not None:
-            elapsed = (now - last).total_seconds()
+            elapsed = (signal.timestamp - last).total_seconds()
             if elapsed < self._cooldown_seconds:
                 return RiskDecision(
                     allowed=False,
@@ -39,6 +38,17 @@ class CooldownRule(RiskRule):
                     reason="Cooldown active",
                     rule=self.name,
                 )
-
-        self._last_seen[key] = now
         return None
+
+    def confirm(self, signal: Signal) -> None:
+        """Update internal state to record that this signal has been allowed."""
+        key = (signal.symbol, signal.strategy)
+        self._last_seen[key] = signal.timestamp
+        self._cleanup_last_seen_dict(signal.timestamp)
+
+    def _cleanup_last_seen_dict(self, current_time: datetime) -> None:
+        """Remove entries from _last_seen that are outside the cooldown window."""
+        cutoff = current_time.timestamp() - self._cooldown_seconds
+        keys_to_delete = [key for key, last in self._last_seen.items() if last.timestamp() < cutoff]
+        for key in keys_to_delete:
+            del self._last_seen[key]

@@ -2,8 +2,7 @@
 """Unit tests for the rules in the Nightwatch application."""
 
 import unittest
-from datetime import datetime, timedelta, timezone
-from unittest.mock import patch
+from datetime import timedelta
 
 from Nightwatch.rules.cooldown_rule import CooldownRule
 from Nightwatch.rules.max_signal_per_minute_rule import MaxSignalPerMinuteRule
@@ -31,6 +30,8 @@ class TestRules(unittest.TestCase):
         """Test that CooldownRule blocks a second signal within the cooldown period."""
         decision1 = self.cooldown_rule.evaluate(self.signal)
         self.assertIsNone(decision1)  # First signal should be allowed
+        if decision1 is None:
+            self.cooldown_rule.confirm(self.signal)
 
         decision2 = self.cooldown_rule.evaluate(self.signal)
         self.assertIsNotNone(decision2)  # Second signal should be blocked
@@ -49,16 +50,15 @@ class TestRules(unittest.TestCase):
 
     def test_cooldown_expired_allows_signal(self) -> None:
         """Test that CooldownRule allows a signal after the cooldown period has expired."""
-        t0 = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-        cooldown_seconds = 1.0
-        t1 = t0 + timedelta(seconds=cooldown_seconds)
+        cooldown = CooldownRule(cooldown_seconds=1.0)
+        rejected_signal = make_signal(timestamp=self.signal.timestamp + timedelta(seconds=0.5))
+        approved_signal = make_signal(timestamp=self.signal.timestamp + timedelta(seconds=1.5))
 
-        with patch("Nightwatch.rules.cooldown_rule.datetime") as mock_dt:
-            mock_dt.now.side_effect = [t0, t0, t1]
-            cooldown = CooldownRule(cooldown_seconds=cooldown_seconds)
-            first_decision = cooldown.evaluate(self.signal)
-            rejected_decision = cooldown.evaluate(self.signal)
-            approved_decision = cooldown.evaluate(self.signal)
+        first_decision = cooldown.evaluate(self.signal)
+        if first_decision is None:
+            cooldown.confirm(self.signal)
+        rejected_decision = cooldown.evaluate(rejected_signal)
+        approved_decision = cooldown.evaluate(approved_signal)
 
         self.assertIsNone(first_decision)
         self.assertIsNotNone(rejected_decision)
@@ -68,7 +68,11 @@ class TestRules(unittest.TestCase):
         """Test that MaxSignalPerMinuteRule blocks signals after the maximum per minute is exceeded."""
 
         decision1 = self.max_signal_per_minute_rule.evaluate(self.signal)
+        if decision1 is None:
+            self.max_signal_per_minute_rule.confirm(self.signal)
         decision2 = self.max_signal_per_minute_rule.evaluate(self.signal)
+        if decision2 is None:
+            self.max_signal_per_minute_rule.confirm(self.signal)
         decision3 = self.max_signal_per_minute_rule.evaluate(self.signal)
 
         self.assertIsNone(decision1)
@@ -80,17 +84,62 @@ class TestRules(unittest.TestCase):
 
     def test_max_signal_per_minute_rule_resets_after_one_minute(self) -> None:
         """Test that MaxSignalPerMinuteRule resets the count after one minute."""
-        t0 = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
-        t1 = t0 + timedelta(seconds=61)
+        rule = MaxSignalPerMinuteRule(max_signals_per_min=1)
 
-        with patch("Nightwatch.rules.max_signal_per_minute_rule.datetime") as mock_dt:
-            mock_dt.now.side_effect = [t0, t0, t1]
-            rule = MaxSignalPerMinuteRule(max_signals_per_min=1)
+        allowed_decision = rule.evaluate(self.signal)
+        self.assertIsNone(allowed_decision)
+        if allowed_decision is None:
+            rule.confirm(self.signal)
+        blocked_signal = make_signal(timestamp=self.signal.timestamp + timedelta(seconds=30))
+        blocked_decision = rule.evaluate(blocked_signal)
+        self.assertIsNotNone(blocked_decision)
 
-            allowed_decision = rule.evaluate(self.signal)
-            self.assertIsNone(allowed_decision)
-            blocked_decision = rule.evaluate(self.signal)
-            self.assertIsNotNone(blocked_decision)
+        reset_signal = make_signal(timestamp=self.signal.timestamp + timedelta(seconds=61))
+        reset_decision = rule.evaluate(reset_signal)
+        self.assertIsNone(reset_decision)
 
-            reset_decision = rule.evaluate(self.signal)
-            self.assertIsNone(reset_decision)
+    def test_clean_up_max_signal_per_minute_rule(self) -> None:
+        """Test that MaxSignalPerMinuteRule cleans up old entries from _last_seen."""
+        rule = MaxSignalPerMinuteRule(max_signals_per_min=1)
+
+        signal1 = make_signal(timestamp=self.signal.timestamp)
+        signal2 = make_signal(timestamp=self.signal.timestamp + timedelta(seconds=30))
+        signal3 = make_signal(timestamp=self.signal.timestamp + timedelta(seconds=61))
+
+        decision1 = rule.evaluate(signal1)
+        self.assertIsNone(decision1)
+        if decision1 is None:
+            rule.confirm(signal1)
+
+        decision2 = rule.evaluate(signal2)
+        self.assertIsNotNone(decision2)  # Should be blocked
+        self.assertFalse(decision2.allowed)
+
+        decision3 = rule.evaluate(signal3)
+        self.assertIsNone(decision3)  # Should be allowed after cleanup
+        if decision3 is None:
+            rule.confirm(signal3)
+        self.assertEqual(len(rule._last_seen), 1)  # Only the entry for signal3 should remain
+
+    def test_clean_up_cooldown_rule(self) -> None:
+        """Test that CooldownRule cleans up old entries from _last_seen."""
+        rule = CooldownRule(cooldown_seconds=1.0)
+
+        signal1 = make_signal(timestamp=self.signal.timestamp)
+        signal2 = make_signal(timestamp=self.signal.timestamp + timedelta(seconds=0.5))
+        signal3 = make_signal(timestamp=self.signal.timestamp + timedelta(seconds=1.5))
+
+        decision1 = rule.evaluate(signal1)
+        self.assertIsNone(decision1)
+        if decision1 is None:
+            rule.confirm(signal1)
+
+        decision2 = rule.evaluate(signal2)
+        self.assertIsNotNone(decision2)  # Should be blocked
+        self.assertFalse(decision2.allowed)
+
+        decision3 = rule.evaluate(signal3)
+        self.assertIsNone(decision3)  # Should be allowed after cleanup
+        if decision3 is None:
+            rule.confirm(signal3)
+        self.assertEqual(len(rule._last_seen), 1)  # Only the entry for signal3 should remain

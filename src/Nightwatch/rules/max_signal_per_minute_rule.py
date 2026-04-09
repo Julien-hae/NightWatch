@@ -1,7 +1,7 @@
 """Rate-limit signals per minute for the same symbol and strategy."""
 
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime
 
 from Nightwatch.models.risk_decision import RiskDecision
 from Nightwatch.models.signal import Signal
@@ -13,8 +13,8 @@ class MaxSignalPerMinuteRule(RiskRule):
 
     def __init__(self, max_signals_per_min: int = 5) -> None:
         """Initialize with a non-negative maximum number of signals per minute."""
-        if max_signals_per_min < 0:
-            msg = "max_signals_per_min must be greater than or equal to 0"
+        if max_signals_per_min <= 0:
+            msg = "max_signals_per_min must be greater than 0"
             raise ValueError(msg)
         self._max_signals_per_min = max_signals_per_min
         self._last_seen: dict[tuple[str, str], deque[datetime]] = {}
@@ -27,11 +27,10 @@ class MaxSignalPerMinuteRule(RiskRule):
     def evaluate(self, signal: Signal) -> RiskDecision | None:
         """Reject if a signal for the same (symbol, strategy) exceeds the maximum allowed per minute."""
         key = (signal.symbol, signal.strategy)
-        now = datetime.now(timezone.utc)
         last = self._last_seen.get(key)
 
         if last is not None and len(last) >= self._max_signals_per_min:
-            while last and (now - last[0]).total_seconds() > 60:  # noqa: PLR2004
+            while last and (signal.timestamp - last[0]).total_seconds() > 60:  # noqa: PLR2004
                 last.popleft()
 
             if len(last) >= self._max_signals_per_min:
@@ -43,9 +42,21 @@ class MaxSignalPerMinuteRule(RiskRule):
                     rule=self.name,
                 )
 
-        if last is None:
-            last = deque()
-            self._last_seen[key] = last
-
-        last.append(now)
         return None
+
+    def confirm(self, signal: Signal) -> None:
+        """Update internal state to record that this signal has been allowed."""
+        key = (signal.symbol, signal.strategy)
+        last = self._last_seen.get(key)
+        if last is None:
+            last = deque(maxlen=self._max_signals_per_min)
+        last.append(signal.timestamp)
+        self._last_seen[key] = last
+        self._cleanup_last_seen_dict(signal.timestamp)
+
+    def _cleanup_last_seen_dict(self, current_time: datetime) -> None:
+        """Remove entries from _last_seen that are outside the 1-minute window."""
+        cutoff = current_time.timestamp() - 60
+        keys_to_delete = [key for key, timestamps in self._last_seen.items() if not timestamps or timestamps[-1].timestamp() < cutoff]
+        for key in keys_to_delete:
+            del self._last_seen[key]

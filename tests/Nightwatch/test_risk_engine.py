@@ -2,9 +2,10 @@
 
 import unittest
 
+from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.risk_decision import RiskDecision
-from Nightwatch.models.risk_engine import RiskEngine
 from Nightwatch.models.signal import Signal
+from Nightwatch.risk_engine import RiskEngine
 from Nightwatch.rules.cooldown_rule import CooldownRule
 from Nightwatch.rules.min_trade_strength_rule import MinTradeStrengthRule
 from Nightwatch.rules.risk_rule import RiskRule
@@ -17,7 +18,8 @@ class TestRiskEngine(unittest.TestCase):
     def setUp(self) -> None:
         """Set up common test data."""
         self.signal = make_signal(strength=99)
-        self.risk_engine = RiskEngine()
+        self.metrics = NightwatchMetrics()
+        self.risk_engine = RiskEngine.create_default(metrics=self.metrics)
 
     def test_evaluate_returns_risk_decision(self) -> None:
         """Test that the evaluate method returns a RiskDecision instance."""
@@ -70,3 +72,24 @@ class TestRiskEngine(unittest.TestCase):
         spy.called = False
         engine.evaluate(self.signal)
         self.assertFalse(spy.called)
+
+    def test_risk_evaluations_total_metric_increment(self) -> None:
+        """Test that the total metric is incremented for each evaluation."""
+        _ = self.risk_engine.evaluate(self.signal)
+        self.assertEqual(self.metrics.get_counter_value(self.metrics.risk_evaluations_total, symbol=self.signal.symbol), 1)
+
+    def test_signals_allowed_total_metric_increment(self) -> None:
+        """Test that the signals allowed metric is incremented when a signal is allowed."""
+        risk_decision = self.risk_engine.evaluate(self.signal)
+        self.assertTrue(risk_decision.allowed)
+        self.assertEqual(self.metrics.get_counter_value(self.metrics.signals_allowed_total, symbol=self.signal.symbol), 1)
+
+    def test_signals_rejected_total_metric_increment(self) -> None:
+        """Test that the signals suppressed metric is incremented when a signal is rejected."""
+        risk_engine = RiskEngine(rules=[CooldownRule(cooldown_seconds=9999)], metrics=self.metrics)
+        _ = risk_engine.evaluate(self.signal)
+        risk_decision = risk_engine.evaluate(self.signal)
+        self.assertFalse(risk_decision.allowed)
+        self.assertEqual(
+            self.metrics.get_counter_value(self.metrics.signals_rejected_total, symbol=self.signal.symbol, rule="CooldownRule"), 1
+        )

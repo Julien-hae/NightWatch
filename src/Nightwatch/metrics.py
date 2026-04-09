@@ -22,6 +22,9 @@ class NightwatchMetrics:
     signals_total: Counter = field(init=False)
     strategy_evaluations_total: Counter = field(init=False)
     signals_suppressed_total: Counter = field(init=False)
+    risk_evaluations_total: Counter = field(init=False)
+    signals_allowed_total: Counter = field(init=False)
+    signals_rejected_total: Counter = field(init=False)
 
     def __post_init__(self) -> None:
         """Create Prometheus counters bound to the instance registry."""
@@ -56,6 +59,24 @@ class NightwatchMetrics:
             "signals_total",
             "Total number of trading signals emitted by the strategy",
             labelnames=["symbol", "side", "strategy"],
+            registry=self.registry,
+        )
+        self.risk_evaluations_total = Counter(
+            "risk_evaluations_total",
+            "Total number of risk evaluations performed",
+            labelnames=["symbol"],
+            registry=self.registry,
+        )
+        self.signals_allowed_total = Counter(
+            "signals_allowed_total",
+            "Total number of signals allowed by the risk engine",
+            labelnames=["symbol"],
+            registry=self.registry,
+        )
+        self.signals_rejected_total = Counter(
+            "signals_rejected_total",
+            "Total number of signals rejected by the risk engine for a given rule",
+            labelnames=["symbol", "rule"],
             registry=self.registry,
         )
         self.strategy_evaluations_total = Counter(

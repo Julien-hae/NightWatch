@@ -1,37 +1,33 @@
-"""Module responsible for running a trading strategy, including buffering market ticks and enforcing cooldown periods between signals."""
+"""Module responsible for running a trading strategy, including buffering market ticks."""
 
 import json
 import logging
-from datetime import datetime, timedelta
 
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
-from Nightwatch.models.risk_engine import RiskEngine
 from Nightwatch.models.signal import Signal
 from Nightwatch.models.tick_buffer import TickBuffer
+from Nightwatch.risk_engine import RiskEngine
 from Nightwatch.strategies.strategy import Strategy
 
 LOGGER = logging.getLogger(__name__)
 
 
 class StrategyRunner:
-    """Manages the execution of a trading strategy, including buffering ticks and enforcing cooldowns."""
+    """Manages the execution of a trading strategy, including buffering ticks."""
 
     def __init__(
         self,
         strategy: Strategy,
         buffer: TickBuffer,
-        cooldown: timedelta = timedelta(seconds=0),
         metric: NightwatchMetrics | None = None,
         risk_engine: RiskEngine | None = None,
     ) -> None:
-        """Initializes the StrategyRunner with the given strategy, tick buffer, cooldown period, and optional metrics."""
-        self._cooldown = cooldown
+        """Initializes the StrategyRunner with the given strategy, tick buffer, and optional metrics."""
         self._strategy = strategy
         self._buffer = buffer
         self._metric = metric
-        self._last_signal_time: dict[str, datetime] = {}
-        self._risk_engine = risk_engine if risk_engine else RiskEngine()
+        self._risk_engine = risk_engine if risk_engine is not None else RiskEngine.create_default(metrics=self._metric)
 
     def on_market_tick(self, tick: MarketTick) -> Signal | None:
         """Process a market tick and determine if a trading signal should be emitted."""
@@ -41,12 +37,6 @@ class StrategyRunner:
             if self._metric:
                 self._metric.signals_suppressed_total.labels(reason="first_tick").inc()
             LOGGER.info("Received first tick for symbol %s: %s", tick.symbol, tick.uid)
-            return None
-        last_signal = self._last_signal_time.get(tick.symbol, None)
-        if last_signal is not None and tick.timestamp - last_signal < self._cooldown:
-            if self._metric:
-                self._metric.signals_suppressed_total.labels(reason="cooldown").inc()
-            LOGGER.debug("Tick for symbol %s received during cooldown period: %s", tick.symbol, tick)
             return None
 
         strategy_decision = self._strategy.on_tick(symbol=tick.symbol, window=self._buffer.get_ticks(tick.symbol))
@@ -88,5 +78,4 @@ class StrategyRunner:
                 "threshold_pct": signal.rationale.get("threshold_pct", None),
             }
             LOGGER.info(json.dumps(log, default=str))
-            self._last_signal_time[tick.symbol] = tick.timestamp
         return signal
