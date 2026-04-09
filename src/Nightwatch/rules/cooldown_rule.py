@@ -44,3 +44,11 @@ class CooldownRule(RiskRule):
         """Update internal state to record that this signal has been allowed."""
         key = (signal.symbol, signal.strategy)
         self._last_seen[key] = signal.timestamp
+        self._cleanup_last_seen_dict(signal.timestamp)
+
+    def _cleanup_last_seen_dict(self, current_time: datetime) -> None:
+        """Remove entries from _last_seen that are outside the cooldown window."""
+        cutoff = current_time.timestamp() - self._cooldown_seconds
+        keys_to_delete = [key for key, last in self._last_seen.items() if last.timestamp() < cutoff]
+        for key in keys_to_delete:
+            del self._last_seen[key]

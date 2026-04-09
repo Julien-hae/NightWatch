@@ -1,7 +1,6 @@
 """Model to represent a risk decision."""
 
 import uuid
-from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
@@ -27,7 +26,7 @@ class RiskDecision(BaseModel):
 
     @field_validator("reason", "rule", mode="after")
     @classmethod
-    def validate_reason_and_rule(cls, v: str | None, info: ValidationInfo[dict[str, Any]]) -> str | None:
+    def validate_reason_and_rule(cls, v: str | None, info: ValidationInfo) -> str | None:  # type: ignore[type-arg]
         """Ensure that reason and rule are set according to allowed."""
         allowed = info.data.get("allowed")
         if allowed is False and v is None:

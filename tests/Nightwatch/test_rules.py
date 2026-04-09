@@ -97,3 +97,45 @@ class TestRules(unittest.TestCase):
         reset_signal = make_signal(timestamp=self.signal.timestamp + timedelta(seconds=61))
         reset_decision = rule.evaluate(reset_signal)
         self.assertIsNone(reset_decision)
+
+    def test_clean_up_max_signal_per_minute_rule(self) -> None:
+        """Test that MaxSignalPerMinuteRule cleans up old entries from _last_seen."""
+        rule = MaxSignalPerMinuteRule(max_signals_per_min=1)
+
+        signal1 = make_signal(timestamp=self.signal.timestamp)
+        signal2 = make_signal(timestamp=self.signal.timestamp + timedelta(seconds=30))
+        signal3 = make_signal(timestamp=self.signal.timestamp + timedelta(seconds=61))
+
+        decision1 = rule.evaluate(signal1)
+        self.assertIsNone(decision1)
+        if decision1 is None:
+            rule.confirm(signal1)
+
+        decision2 = rule.evaluate(signal2)
+        self.assertIsNotNone(decision2)  # Should be blocked
+        self.assertFalse(decision2.allowed)
+
+        decision3 = rule.evaluate(signal3)
+        self.assertIsNone(decision3)  # Should be allowed after cleanup
+        self.assertEqual(len(rule._last_seen), 1)  # Only the entry for signal3 should remain
+
+    def test_clean_up_cooldown_rule(self) -> None:
+        """Test that CooldownRule cleans up old entries from _last_seen."""
+        rule = CooldownRule(cooldown_seconds=1.0)
+
+        signal1 = make_signal(timestamp=self.signal.timestamp)
+        signal2 = make_signal(timestamp=self.signal.timestamp + timedelta(seconds=0.5))
+        signal3 = make_signal(timestamp=self.signal.timestamp + timedelta(seconds=1.5))
+
+        decision1 = rule.evaluate(signal1)
+        self.assertIsNone(decision1)
+        if decision1 is None:
+            rule.confirm(signal1)
+
+        decision2 = rule.evaluate(signal2)
+        self.assertIsNotNone(decision2)  # Should be blocked
+        self.assertFalse(decision2.allowed)
+
+        decision3 = rule.evaluate(signal3)
+        self.assertIsNone(decision3)  # Should be allowed after cleanup
+        self.assertEqual(len(rule._last_seen), 1)  # Only the entry for signal3 should remain

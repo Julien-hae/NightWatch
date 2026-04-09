@@ -52,3 +52,11 @@ class MaxSignalPerMinuteRule(RiskRule):
             last = deque(maxlen=self._max_signals_per_min)
         last.append(signal.timestamp)
         self._last_seen[key] = last
+        self._cleanup_last_seen_dict(signal.timestamp)
+
+    def _cleanup_last_seen_dict(self, current_time: datetime) -> None:
+        """Remove entries from _last_seen that are outside the 1-minute window."""
+        cutoff = current_time.timestamp() - 60
+        keys_to_delete = [key for key, timestamps in self._last_seen.items() if not timestamps or timestamps[-1].timestamp() < cutoff]
+        for key in keys_to_delete:
+            del self._last_seen[key]
