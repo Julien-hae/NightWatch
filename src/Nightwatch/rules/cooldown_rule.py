@@ -26,11 +26,10 @@ class CooldownRule(RiskRule):
     def evaluate(self, signal: Signal) -> RiskDecision | None:
         """Reject if a signal for the same (symbol, strategy) was allowed within cooldown_seconds."""
         key = (signal.symbol, signal.strategy)
-        now = datetime.now(timezone.utc)
         last = self._last_seen.get(key)
 
         if last is not None:
-            elapsed = (now - last).total_seconds()
+            elapsed = (datetime.now(timezone.utc) - last).total_seconds()
             if elapsed < self._cooldown_seconds:
                 return RiskDecision(
                     allowed=False,
@@ -39,6 +38,9 @@ class CooldownRule(RiskRule):
                     reason="Cooldown active",
                     rule=self.name,
                 )
-
-        self._last_seen[key] = now
         return None
+
+    def confirm(self, signal: Signal) -> None:
+        """Update internal state to record that this signal has been allowed."""
+        key = (signal.symbol, signal.strategy)
+        self._last_seen[key] = datetime.now(timezone.utc)

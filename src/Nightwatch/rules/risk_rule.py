@@ -22,3 +22,6 @@ class RiskRule(ABC):
             None if the signal passes this rule (no objection).
             A RiskDecision(allowed=False, ...) if the signal is rejected.
         """
+
+    def confirm(self, signal: Signal) -> None:
+        """Confirm that the signal has been allowed by all rules. Used to update internal state after a signal is accepted."""

@@ -27,10 +27,10 @@ class MaxSignalPerMinuteRule(RiskRule):
     def evaluate(self, signal: Signal) -> RiskDecision | None:
         """Reject if a signal for the same (symbol, strategy) exceeds the maximum allowed per minute."""
         key = (signal.symbol, signal.strategy)
-        now = datetime.now(timezone.utc)
         last = self._last_seen.get(key)
 
         if last is not None and len(last) >= self._max_signals_per_min:
+            now = datetime.now(timezone.utc)
             while last and (now - last[0]).total_seconds() > 60:  # noqa: PLR2004
                 last.popleft()
 
@@ -43,9 +43,14 @@ class MaxSignalPerMinuteRule(RiskRule):
                     rule=self.name,
                 )
 
-        if last is None:
-            last = deque()
-            self._last_seen[key] = last
-
-        last.append(now)
         return None
+
+    def confirm(self, signal: Signal) -> None:
+        """Update internal state to record that this signal has been allowed."""
+        key = (signal.symbol, signal.strategy)
+        now = datetime.now(timezone.utc)
+        last = self._last_seen.get(key)
+        if last is None:
+            last = deque(maxlen=self._max_signals_per_min)
+        last.append(now)
+        self._last_seen[key] = last

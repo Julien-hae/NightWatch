@@ -31,6 +31,9 @@ class RiskEngine:
             if decision is not None:
                 return decision
 
+        for rule in self._rules:
+            rule.confirm(signal)
+
         return RiskDecision(
             allowed=True,
             symbol=signal.symbol,

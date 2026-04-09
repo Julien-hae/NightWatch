@@ -31,6 +31,8 @@ class TestRules(unittest.TestCase):
         """Test that CooldownRule blocks a second signal within the cooldown period."""
         decision1 = self.cooldown_rule.evaluate(self.signal)
         self.assertIsNone(decision1)  # First signal should be allowed
+        if decision1 is None:
+            self.cooldown_rule.confirm(self.signal)
 
         decision2 = self.cooldown_rule.evaluate(self.signal)
         self.assertIsNotNone(decision2)  # Second signal should be blocked
@@ -57,6 +59,8 @@ class TestRules(unittest.TestCase):
             mock_dt.now.side_effect = [t0, t0, t1]
             cooldown = CooldownRule(cooldown_seconds=cooldown_seconds)
             first_decision = cooldown.evaluate(self.signal)
+            if first_decision is None:
+                cooldown.confirm(self.signal)
             rejected_decision = cooldown.evaluate(self.signal)
             approved_decision = cooldown.evaluate(self.signal)
 
@@ -68,7 +72,11 @@ class TestRules(unittest.TestCase):
         """Test that MaxSignalPerMinuteRule blocks signals after the maximum per minute is exceeded."""
 
         decision1 = self.max_signal_per_minute_rule.evaluate(self.signal)
+        if decision1 is None:
+            self.max_signal_per_minute_rule.confirm(self.signal)
         decision2 = self.max_signal_per_minute_rule.evaluate(self.signal)
+        if decision2 is None:
+            self.max_signal_per_minute_rule.confirm(self.signal)
         decision3 = self.max_signal_per_minute_rule.evaluate(self.signal)
 
         self.assertIsNone(decision1)
@@ -84,11 +92,13 @@ class TestRules(unittest.TestCase):
         t1 = t0 + timedelta(seconds=61)
 
         with patch("Nightwatch.rules.max_signal_per_minute_rule.datetime") as mock_dt:
-            mock_dt.now.side_effect = [t0, t0, t1]
+            mock_dt.now.side_effect = [t0, t0, t1, t1]
             rule = MaxSignalPerMinuteRule(max_signals_per_min=1)
 
             allowed_decision = rule.evaluate(self.signal)
             self.assertIsNone(allowed_decision)
+            if allowed_decision is None:
+                rule.confirm(self.signal)
             blocked_decision = rule.evaluate(self.signal)
             self.assertIsNotNone(blocked_decision)
 

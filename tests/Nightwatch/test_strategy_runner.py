@@ -314,18 +314,19 @@ class TestStrategyRunner(unittest.TestCase):
         risk_engine = RiskEngine(rules=[CooldownRule(cooldown_seconds=999), MinTradeStrengthRule(min_strength=50.0)])
         runner = StrategyRunner(strategy=strategy, buffer=buffer, cooldown=timedelta(seconds=0), metric=metric, risk_engine=risk_engine)
 
-        # First signal: CooldownRule passes (first ever), MinTradeStrengthRule rejects (15 < 50)
-        ticks = make_tick_sequence(prices=[Decimal("100"), Decimal("115")], start=self.start_time, interval_sec=5.0, symbol="BTC/USD")
+        # Signal 1: delta_pct=55% → strength=55 ≥ 50 → passes both rules → CooldownRule confirm() called
+        ticks = make_tick_sequence(prices=[Decimal("100"), Decimal("155")], start=self.start_time, interval_sec=5.0, symbol="BTC/USD")
         signal1 = feed_ticks(runner, ticks)
-        self.assertIsNone(signal1)
-        min_suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="MinTradeStrengthRule") or 0.0
-        self.assertEqual(min_suppressed, 1.0)
+        self.assertIsNotNone(signal1)
+        self.assertEqual(metric.get_counter_value(metric.signals_suppressed_total, reason="MinTradeStrengthRule") or 0.0, 0.0)
 
-        # Second signal: CooldownRule rejects first (within 999s), MinTradeStrengthRule never reached
-        tick2 = make_tick(price=Decimal("135"), timestamp=self.start_time + timedelta(seconds=10))
+        # Signal 2 at t+65s: window covers [t+5s..t+65s], start_price=155, end_price=172
+        # delta_pct ≈ 10.97% → strategy fires; strength ≈ 10.97 < 50 → MinTradeStrengthRule would reject
+        # but CooldownRule fires first (65s < 999s cooldown)
+        tick2 = make_tick(price=Decimal("172"), timestamp=self.start_time + timedelta(seconds=65))
         runner.on_market_tick(tick2)
         cooldown_suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="CooldownRule") or 0.0
         self.assertEqual(cooldown_suppressed, 1.0)
-        # MinTradeStrengthRule count unchanged — proves CooldownRule rejected first
+        # MinTradeStrengthRule count unchanged — proves CooldownRule rejected first, short-circuiting the chain
         min_suppressed_after = metric.get_counter_value(metric.signals_suppressed_total, reason="MinTradeStrengthRule") or 0.0
-        self.assertEqual(min_suppressed_after, 1.0)
+        self.assertEqual(min_suppressed_after, 0.0)
