@@ -27,7 +27,7 @@ class StrategyRunner:
         self._strategy = strategy
         self._buffer = buffer
         self._metric = metric
-        self._risk_engine = risk_engine if risk_engine else RiskEngine()
+        self._risk_engine = risk_engine if risk_engine is not None else RiskEngine.create_default()
 
     def on_market_tick(self, tick: MarketTick) -> Signal | None:
         """Process a market tick and determine if a trading signal should be emitted."""

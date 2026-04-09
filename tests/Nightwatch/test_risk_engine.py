@@ -19,7 +19,7 @@ class TestRiskEngine(unittest.TestCase):
         """Set up common test data."""
         self.signal = make_signal(strength=99)
         self.metrics = NightwatchMetrics()
-        self.risk_engine = RiskEngine(metrics=self.metrics)
+        self.risk_engine = RiskEngine.create_default(metrics=self.metrics)
 
     def test_evaluate_returns_risk_decision(self) -> None:
         """Test that the evaluate method returns a RiskDecision instance."""
