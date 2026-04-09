@@ -92,21 +92,6 @@ class TestStrategyRunner(unittest.TestCase):
         )
         self.assertEqual(final_evaluations, initial_evaluations + 1)
 
-    def test_cooldown_zero_does_not_suppress_same_timestamp(self) -> None:
-        """Given cooldown=0, when two qualifying ticks arrive at the same timestamp,
-        then both emit signals (no suppression)."""
-        strategy = MomentumBurstStrategy(threshold_pct=10, metric=self._metric)
-        buffer = TickBuffer(max_ticks_per_symbol=30)
-        runner = StrategyRunner(strategy=strategy, buffer=buffer, metric=self._metric, risk_engine=self.risk_engine)
-        ticks = make_tick_sequence(prices=[Decimal("100"), Decimal("115")], start=self.start_time, interval_sec=10.0, symbol="BTC/USD")
-        signal1 = feed_ticks(runner, ticks)
-        self.assertIsNotNone(signal1)
-
-        # Same timestamp, still qualifying
-        tick_at_boundary = make_tick(price=Decimal("135"), timestamp=self.start_time + timedelta(seconds=10))
-        signal2 = runner.on_market_tick(tick_at_boundary)
-        self.assertIsNotNone(signal2)  # Should NOT be suppressed with cooldown=0
-
     def test_risk_engine_rejects_low_strength_signal(self) -> None:
         """When MinTradeStrengthRule min_strength exceeds the signal strength, on_market_tick returns None."""
         metric = NightwatchMetrics()

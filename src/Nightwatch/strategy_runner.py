@@ -1,4 +1,4 @@
-"""Module responsible for running a trading strategy, including buffering market ticks and enforcing cooldown periods between signals."""
+"""Module responsible for running a trading strategy, including buffering market ticks."""
 
 import json
 import logging
@@ -14,7 +14,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class StrategyRunner:
-    """Manages the execution of a trading strategy, including buffering ticks and enforcing cooldowns."""
+    """Manages the execution of a trading strategy, including buffering ticks."""
 
     def __init__(
         self,
@@ -23,11 +23,11 @@ class StrategyRunner:
         metric: NightwatchMetrics | None = None,
         risk_engine: RiskEngine | None = None,
     ) -> None:
-        """Initializes the StrategyRunner with the given strategy, tick buffer, cooldown period, and optional metrics."""
+        """Initializes the StrategyRunner with the given strategy, tick buffer, and optional metrics."""
         self._strategy = strategy
         self._buffer = buffer
         self._metric = metric
-        self._risk_engine = risk_engine if risk_engine is not None else RiskEngine.create_default()
+        self._risk_engine = risk_engine if risk_engine is not None else RiskEngine.create_default(metrics=self._metric)
 
     def on_market_tick(self, tick: MarketTick) -> Signal | None:
         """Process a market tick and determine if a trading signal should be emitted."""

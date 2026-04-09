@@ -13,8 +13,8 @@ class MaxSignalPerMinuteRule(RiskRule):
 
     def __init__(self, max_signals_per_min: int = 5) -> None:
         """Initialize with a non-negative maximum number of signals per minute."""
-        if max_signals_per_min < 0:
-            msg = "max_signals_per_min must be greater than or equal to 0"
+        if max_signals_per_min <= 0:
+            msg = "max_signals_per_min must be greater than 0"
             raise ValueError(msg)
         self._max_signals_per_min = max_signals_per_min
         self._last_seen: dict[tuple[str, str], deque[datetime]] = {}

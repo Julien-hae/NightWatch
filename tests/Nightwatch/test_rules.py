@@ -117,6 +117,8 @@ class TestRules(unittest.TestCase):
 
         decision3 = rule.evaluate(signal3)
         self.assertIsNone(decision3)  # Should be allowed after cleanup
+        if decision3 is None:
+            rule.confirm(signal3)
         self.assertEqual(len(rule._last_seen), 1)  # Only the entry for signal3 should remain
 
     def test_clean_up_cooldown_rule(self) -> None:
@@ -138,4 +140,6 @@ class TestRules(unittest.TestCase):
 
         decision3 = rule.evaluate(signal3)
         self.assertIsNone(decision3)  # Should be allowed after cleanup
+        if decision3 is None:
+            rule.confirm(signal3)
         self.assertEqual(len(rule._last_seen), 1)  # Only the entry for signal3 should remain
