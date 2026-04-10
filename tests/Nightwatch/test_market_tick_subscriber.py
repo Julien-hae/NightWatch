@@ -9,11 +9,11 @@ from typing import Any
 
 from prometheus_client import CollectorRegistry
 
+from Nightwatch.messaging.publisher import MarketTickPublisher
+from Nightwatch.messaging.subscriber import MarketTickSubscriber
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.nats_config import NatsConnectionConfig
-from Nightwatch.publisher import MarketTickPublisher
-from Nightwatch.subscriber import MarketTickSubscriber
 from tests.fixtures.nats_server import NatsServerFixture
 from tests.fixtures.tick_factory import make_tick
 

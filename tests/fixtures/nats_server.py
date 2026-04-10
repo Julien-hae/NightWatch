@@ -1,8 +1,10 @@
 """Fixture to manage a temporary nats-server process for integration tests."""
 
 import os
+import shutil
 import socket
 import subprocess
+import tempfile
 import time
 
 
@@ -15,6 +17,7 @@ class NatsServerFixture:
         self._token: str | None = token or os.environ.get("NATS_TOKEN", "")
         self._jetstream: bool = jetstream
         self._proc: subprocess.Popen[bytes] | None = None
+        self._store_dir: str | None = None
 
     @property
     def url(self) -> str:
@@ -34,7 +37,9 @@ class NatsServerFixture:
             self.port = self._free_port()
         cmd = ["nats-server", "-p", str(self.port)]
         if self._jetstream:
-            cmd += ["-js"]
+            if self._store_dir is None:
+                self._store_dir = tempfile.mkdtemp(prefix="nats-js-")
+            cmd += ["-js", "-sd", self._store_dir]
         if self._token:
             cmd += ["-auth", self._token]
         try:
@@ -60,11 +65,14 @@ class NatsServerFixture:
                 time.sleep(0.05)
 
     def stop(self) -> None:
-        """Gracefully stop nats-server (SIGTERM)."""
+        """Gracefully stop nats-server (SIGTERM) and clean up the JetStream store directory."""
         if self._proc is not None:
             self._proc.terminate()
             self._proc.wait(timeout=5)
             self._proc = None
+        if self._store_dir is not None:
+            shutil.rmtree(self._store_dir, ignore_errors=True)
+            self._store_dir = None
 
     def kill(self) -> None:
         """Force-kill nats-server (SIGKILL) to simulate a crash."""

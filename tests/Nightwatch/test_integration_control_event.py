@@ -11,8 +11,8 @@ from typing import Any
 from nats.js.api import AckPolicy, ConsumerConfig, DeliverPolicy
 from prometheus_client import CollectorRegistry
 
-from Nightwatch.control_event_publisher import CONTROL_STREAM_NAME, ControlEventPublisher
-from Nightwatch.control_event_subscriber import ControlEventSubscriber
+from Nightwatch.messaging.control_event_publisher import CONTROL_STREAM_NAME, ControlEventPublisher
+from Nightwatch.messaging.control_event_subscriber import ControlEventSubscriber
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.bot_control_event import BotControlEvent
 from Nightwatch.models.nats_config import NatsConnectionConfig
@@ -23,6 +23,15 @@ _MIN_REDELIVERY_COUNT = 2
 
 def _make_event(*, kill: bool = True, reason: str = "flash crash") -> BotControlEvent:
     return BotControlEvent(kill=kill, timestamp=datetime.now(tz=timezone.utc), reason=reason)
+
+
+def _counter_value(counter: Any) -> float:
+    """Return the current value of a Prometheus counter (reads the *_total sample)."""
+    for mf in counter.collect():
+        for sample in mf.samples:
+            if sample.name.endswith("_total"):
+                return float(sample.value)
+    return 0.0
 
 
 @unittest.skipUnless(os.environ.get("RUN_INTEGRATION"), "Integration tests require RUN_INTEGRATION=1")
@@ -60,6 +69,15 @@ class TestControlEventIntegration(unittest.TestCase):
         cls.loop.close()
         cls.nats.stop()
 
+    def setUp(self) -> None:
+        """Purge the CONTROL stream before each test to ensure full isolation."""
+
+        async def _purge() -> None:
+            js = self.publisher.client.jetstream()
+            await js.purge_stream(CONTROL_STREAM_NAME)
+
+        self.loop.run_until_complete(_purge())
+
     def _run(self, coro: Coroutine[Any, Any, Any]) -> Any:
         return self.loop.run_until_complete(coro)
 
@@ -87,7 +105,9 @@ class TestControlEventIntegration(unittest.TestCase):
                 received.append(e)
                 received_event.set()
 
-            await self.subscriber.subscribe(on_event, durable="trade-service-rcv")
+            # Subscribe first (DeliverPolicy.NEW means only messages arriving
+            # AFTER consumer creation are delivered), then publish.
+            await self.subscriber.subscribe(on_event, durable="ts-rcv-test")
 
             original = _make_event(reason="integration test receive")
             await self.publisher.publish(original)
@@ -129,7 +149,7 @@ class TestControlEventIntegration(unittest.TestCase):
             js = sub.client.jetstream()
             consumer_config = ConsumerConfig(
                 durable_name="no-ack-consumer",
-                deliver_policy=DeliverPolicy.ALL,
+                deliver_policy=DeliverPolicy.NEW,
                 ack_policy=AckPolicy.EXPLICIT,
                 ack_wait=1.0,  # 1-second ack wait so the test runs fast
                 max_deliver=5,
@@ -166,25 +186,19 @@ class TestControlEventIntegration(unittest.TestCase):
         """Publishing and receiving a control event increments the Prometheus counters."""
 
         async def _test() -> None:
-            def _get(counter: Any) -> float:
-                for mf in counter.collect():
-                    for sample in mf.samples:
-                        return float(sample.value)
-                return 0.0
-
-            before_pub = _get(self.metric.control_events_published_total)
-            before_rcv = _get(self.metric.control_events_received_total)
+            before_pub = _counter_value(self.metric.control_events_published_total)
+            before_rcv = _counter_value(self.metric.control_events_received_total)
 
             received_event = asyncio.Event()
 
             async def on_event(_e: BotControlEvent) -> None:
                 received_event.set()
 
-            await self.subscriber.subscribe(on_event, durable="trade-service-metrics")
+            await self.subscriber.subscribe(on_event, durable="ts-metrics-test")
             await self.publisher.publish(_make_event(reason="metrics test"))
             await asyncio.wait_for(received_event.wait(), timeout=5.0)
 
-            self.assertEqual(_get(self.metric.control_events_published_total), before_pub + 1)
-            self.assertEqual(_get(self.metric.control_events_received_total), before_rcv + 1)
+            self.assertEqual(_counter_value(self.metric.control_events_published_total), before_pub + 1)
+            self.assertEqual(_counter_value(self.metric.control_events_received_total), before_rcv + 1)
 
         self._run(_test())

@@ -8,11 +8,11 @@ from collections.abc import Coroutine
 from typing import Any
 
 from Nightwatch.kraken_adapter import KrakenAdapter
+from Nightwatch.messaging.publisher import MarketTickPublisher
+from Nightwatch.messaging.subscriber import MarketTickSubscriber
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.nats_config import NatsConnectionConfig
 from Nightwatch.models.tick_buffer import TickBuffer
-from Nightwatch.publisher import MarketTickPublisher
-from Nightwatch.subscriber import MarketTickSubscriber
 from tests.fixtures.nats_server import NatsServerFixture
 
 
