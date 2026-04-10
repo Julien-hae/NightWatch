@@ -7,6 +7,7 @@ from nats.js.api import AckPolicy, ConsumerConfig, DeliverPolicy
 from nats.js.client import JetStreamContext
 from pydantic import ValidationError
 
+from Nightwatch.control_event_publisher import CONTROL_STREAM_NAME, CONTROL_SUBJECT
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.bot_control_event import BotControlEvent
 from Nightwatch.models.nats_config import NatsConnectionConfig
@@ -14,8 +15,6 @@ from Nightwatch.nats_connection import NatsConnector
 
 LOGGER = logging.getLogger(__name__)
 
-CONTROL_SUBJECT = "control.bot"
-CONTROL_STREAM_NAME = "CONTROL"
 DEFAULT_DURABLE_NAME = "trade-service"
 
 
