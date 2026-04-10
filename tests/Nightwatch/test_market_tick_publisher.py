@@ -12,9 +12,9 @@ from unittest.mock import patch
 
 from nats.aio.client import Client as NatsClient
 
+from Nightwatch.messaging.publisher import MAX_PAYLOAD_BYTES, MarketTickPublisher, PayloadTooLargeError
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.nats_config import NatsConnectionConfig
-from Nightwatch.publisher import MAX_PAYLOAD_BYTES, MarketTickPublisher, PayloadTooLargeError
 from tests.fixtures.nats_server import NatsServerFixture
 from tests.fixtures.tick_factory import make_tick
 

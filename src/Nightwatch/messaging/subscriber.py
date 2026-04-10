@@ -7,10 +7,10 @@ from nats.aio.msg import Msg
 from nats.aio.subscription import Subscription
 from pydantic import ValidationError
 
+from Nightwatch.messaging.nats_connection import NatsConnector
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.nats_config import NatsConnectionConfig
-from Nightwatch.nats_connection import NatsConnector
 
 LOGGER = logging.getLogger(__name__)
 
