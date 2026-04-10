@@ -25,6 +25,8 @@ class NightwatchMetrics:
     risk_evaluations_total: Counter = field(init=False)
     signals_allowed_total: Counter = field(init=False)
     signals_rejected_total: Counter = field(init=False)
+    control_events_published_total: Counter = field(init=False)
+    control_events_received_total: Counter = field(init=False)
 
     def __post_init__(self) -> None:
         """Create Prometheus counters bound to the instance registry."""
@@ -89,6 +91,16 @@ class NightwatchMetrics:
             "signals_suppressed_total",
             "Total number of signals suppressed due to 'reason'",
             labelnames=["reason"],
+            registry=self.registry,
+        )
+        self.control_events_published_total = Counter(
+            "control_events_published_total",
+            "Total number of control events published via JetStream",
+            registry=self.registry,
+        )
+        self.control_events_received_total = Counter(
+            "control_events_received_total",
+            "Total number of control events received by the subscriber",
             registry=self.registry,
         )
 

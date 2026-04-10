@@ -9,10 +9,11 @@ import time
 class NatsServerFixture:
     """Manage a temporary nats-server process for integration tests."""
 
-    def __init__(self, token: str | None = None) -> None:
+    def __init__(self, token: str | None = None, jetstream: bool = False) -> None:
         """Initialize the NatsServerFixture."""
         self.port: int = 0
         self._token: str | None = token or os.environ.get("NATS_TOKEN", "")
+        self._jetstream: bool = jetstream
         self._proc: subprocess.Popen[bytes] | None = None
 
     @property
@@ -32,6 +33,8 @@ class NatsServerFixture:
         if self.port == 0:
             self.port = self._free_port()
         cmd = ["nats-server", "-p", str(self.port)]
+        if self._jetstream:
+            cmd += ["-js"]
         if self._token:
             cmd += ["-auth", self._token]
         try:
