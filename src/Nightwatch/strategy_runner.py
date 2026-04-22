@@ -4,6 +4,7 @@ import json
 import logging
 
 from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.models.kill_switch import KillSwitch
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.signal import Signal
 from Nightwatch.models.tick_buffer import TickBuffer
@@ -22,17 +23,25 @@ class StrategyRunner:
         buffer: TickBuffer,
         metric: NightwatchMetrics | None = None,
         risk_engine: RiskEngine | None = None,
+        kill_switch: KillSwitch | None = None,
     ) -> None:
         """Initializes the StrategyRunner with the given strategy, tick buffer, and optional metrics."""
         self._strategy = strategy
         self._buffer = buffer
         self._metric = metric
         self._risk_engine = risk_engine if risk_engine is not None else RiskEngine.create_default(metrics=self._metric)
+        self._kill_switch = kill_switch if kill_switch is not None else KillSwitch()
 
     def on_market_tick(self, tick: MarketTick) -> Signal | None:
-        """Process a market tick and determine if a trading signal should be emitted."""
+        """Process a market tick and determine if a trading signal should be emitted. Return None if Kill switch is active."""
         first_tick = self._buffer.get_first_tick(tick.symbol)
         self._buffer.add_tick(tick)
+        if not self._kill_switch.trading_enabled:
+            if self._metric:
+                self._metric.signals_suppressed_total.labels(reason="kill_switch").inc()
+            LOGGER.debug("Kill switch is active — suppressing tick for %s", tick.symbol)
+            return None
+
         if not first_tick:
             if self._metric:
                 self._metric.signals_suppressed_total.labels(reason="first_tick").inc()
