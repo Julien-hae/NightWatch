@@ -39,10 +39,11 @@ class TestKillSwitch(unittest.TestCase):
         strategy = NoneStrategy()
         buffer = TickBuffer()
         metric = NightwatchMetrics()
-        runner = StrategyRunner(strategy=strategy, buffer=buffer, metric=metric)
+        kill_switch = KillSwitch()
+        runner = StrategyRunner(strategy=strategy, buffer=buffer, metric=metric, kill_switch=kill_switch)
 
         event = BotControlEvent(kill=True, timestamp=datetime.now(timezone.utc), reason="Testing kill switch")
-        runner._kill_switch.apply(event)
+        kill_switch.apply(event)
         before_kill_switch_metric = metric.get_counter_value(metric.signals_suppressed_total, reason="kill_switch") or 0.0
         tick = make_tick()
         signal = runner.on_market_tick(tick)
