@@ -2,14 +2,18 @@
 
 import unittest
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.bot_control_event import BotControlEvent
 from Nightwatch.models.kill_switch import KillSwitch
 from Nightwatch.models.tick_buffer import TickBuffer
+from Nightwatch.risk_engine import RiskEngine
+from Nightwatch.rules.max_signal_per_minute_rule import MaxSignalPerMinuteRule
+from Nightwatch.strategies.momentum_burst import MomentumBurstStrategy
 from Nightwatch.strategy_runner import StrategyRunner
 from tests.fixtures.test_strategy import NoneStrategy
-from tests.fixtures.tick_factory import make_tick
+from tests.fixtures.tick_factory import feed_ticks, make_tick, make_tick_sequence
 
 
 class TestKillSwitch(unittest.TestCase):
@@ -50,3 +54,25 @@ class TestKillSwitch(unittest.TestCase):
         self.assertIsNone(signal)
         after_kill_switch_metric = metric.get_counter_value(metric.signals_suppressed_total, reason="kill_switch") or 0.0
         self.assertEqual(after_kill_switch_metric, before_kill_switch_metric + 1.0)
+
+    def test_strategy_runner_processes_signals_when_kill_switch_inactive(self) -> None:
+        """Test that the StrategyRunner emits signals normally when the kill switch is inactive."""
+        metric = NightwatchMetrics()
+        strategy = MomentumBurstStrategy(threshold_pct=10, metric=metric)
+        buffer = TickBuffer(max_ticks_per_symbol=30)
+        risk_engine = RiskEngine(rules=[MaxSignalPerMinuteRule(max_signals_per_min=1000)])
+        kill_switch = KillSwitch()  # trading_enabled=True by default
+        runner = StrategyRunner(strategy=strategy, buffer=buffer, metric=metric, risk_engine=risk_engine, kill_switch=kill_switch)
+
+        start_time = datetime(2026, 1, 1, 10, 0, 0, tzinfo=timezone.utc)
+        ticks = make_tick_sequence(
+            prices=[Decimal("100"), Decimal("105"), Decimal("115")],
+            start=start_time,
+            interval_sec=5.0,
+            symbol="BTC/USD",
+        )
+        signal = feed_ticks(runner, ticks)
+
+        self.assertIsNotNone(signal)
+        suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="kill_switch") or 0.0
+        self.assertEqual(suppressed, 0.0)
