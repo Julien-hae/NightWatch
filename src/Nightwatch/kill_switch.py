@@ -18,7 +18,8 @@ class KillSwitch:
         """Update state from a BotControlEvent. NOT thread-safe; must be called from the asyncio event loop."""
         self.trading_enabled = not event.kill
         LOGGER.info(
-            "Kill switch updated: trading_enabled=%s reason=%s",
+            "Kill switch updated: trading_enabled=%s reason=%s timestamp=%s",
             self.trading_enabled,
             event.reason,
+            event.timestamp,
         )

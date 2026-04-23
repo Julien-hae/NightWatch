@@ -93,3 +93,9 @@ class TestRiskEngine(unittest.TestCase):
         self.assertEqual(
             self.metrics.get_counter_value(self.metrics.signals_rejected_total, symbol=self.signal.symbol, rule="CooldownRule"), 1
         )
+
+    def test_create_default_rule_order(self) -> None:
+        """Test that the default rules are created in the expected order ala the contract."""
+        engine = RiskEngine.create_default()
+        rule_names = [r.name for r in engine._rules]
+        self.assertEqual(rule_names, ["CooldownRule", "MinTradeStrengthRule", "MaxSignalPerMinuteRule"])

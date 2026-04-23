@@ -2,7 +2,7 @@
 
 import unittest
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from Nightwatch.models.signal import Side, Signal
@@ -104,3 +104,15 @@ class TestSignal(unittest.TestCase):
                 source="trade-service",
                 schema_version=1,
             )
+
+    def test_naive_timestamp_raises(self) -> None:
+        """Test that timezone-naive timestamps are rejected."""
+        with self.assertRaises(ValueError):
+            make_signal(timestamp=datetime(2026, 1, 1, 12, 0, 0))
+
+    def test_timestamp_is_normalized_to_utc(self) -> None:
+        """Test that timezone-aware timestamps are normalized to UTC."""
+        local_tz = timezone(timedelta(hours=2))
+        signal = make_signal(timestamp=datetime(2026, 1, 1, 12, 0, 0, tzinfo=local_tz))
+        self.assertEqual(signal.timestamp.tzinfo, timezone.utc)
+        self.assertEqual(signal.timestamp, datetime(2026, 1, 1, 10, 0, 0, tzinfo=timezone.utc))
