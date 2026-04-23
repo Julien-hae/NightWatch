@@ -10,13 +10,13 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 
+from Nightwatch.kill_switch import KillSwitch
 from Nightwatch.messaging.control_event_publisher import ControlEventPublisher
 from Nightwatch.messaging.control_event_subscriber import ControlEventSubscriber
 from Nightwatch.messaging.publisher import MarketTickPublisher
 from Nightwatch.messaging.subscriber import MarketTickSubscriber
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.bot_control_event import BotControlEvent
-from Nightwatch.models.kill_switch import KillSwitch
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.nats_config import NatsConnectionConfig
 from Nightwatch.models.tick_buffer import TickBuffer

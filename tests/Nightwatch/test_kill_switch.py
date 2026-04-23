@@ -4,9 +4,9 @@ import unittest
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from Nightwatch.kill_switch import KillSwitch
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.bot_control_event import BotControlEvent
-from Nightwatch.models.kill_switch import KillSwitch
 from Nightwatch.models.tick_buffer import TickBuffer
 from Nightwatch.risk_engine import RiskEngine
 from Nightwatch.rules.max_signal_per_minute_rule import MaxSignalPerMinuteRule

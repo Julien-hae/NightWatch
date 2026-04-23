@@ -3,8 +3,8 @@
 import json
 import logging
 
+from Nightwatch.kill_switch import KillSwitch
 from Nightwatch.metrics import NightwatchMetrics
-from Nightwatch.models.kill_switch import KillSwitch
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.signal import Signal
 from Nightwatch.models.tick_buffer import TickBuffer
