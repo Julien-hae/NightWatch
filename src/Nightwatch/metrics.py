@@ -27,6 +27,8 @@ class NightwatchMetrics:
     signals_rejected_total: Counter = field(init=False)
     control_events_published_total: Counter = field(init=False)
     control_events_received_total: Counter = field(init=False)
+    control_events_dead_lettered_total: Counter = field(init=False)
+    kill_switch_toggles_total: Counter = field(init=False)
 
     def __post_init__(self) -> None:
         """Create Prometheus counters bound to the instance registry."""
@@ -101,6 +103,16 @@ class NightwatchMetrics:
         self.control_events_received_total = Counter(
             "control_events_received_total",
             "Total number of control events received by the subscriber",
+            registry=self.registry,
+        )
+        self.control_events_dead_lettered_total = Counter(
+            "control_events_dead_lettered_total",
+            "Total number of control events dead-lettered after exhausting max delivery attempts",
+            registry=self.registry,
+        )
+        self.kill_switch_toggles_total = Counter(
+            "kill_switch_toggles_total",
+            "Total number of kill switch toggles",
             registry=self.registry,
         )
 

@@ -26,7 +26,7 @@ class TestBotControlEvent(unittest.TestCase):
             BotControlEvent(
                 kill=True,
                 timestamp=datetime.now(timezone.utc),
-                reason="   ",  # Just whitespace
+                reason="   ",
             )
 
     def test_json_roundtrip(self) -> None:

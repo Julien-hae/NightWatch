@@ -34,7 +34,7 @@ class TestKillSwitch(unittest.TestCase):
 
     def test_trading_activated_by_bot_control_event(self) -> None:
         """Test that applying a BotControlEvent with kill=False enables trading."""
-        kill_switch = KillSwitch(trading_enabled=False)
+        kill_switch = KillSwitch()
         event = BotControlEvent(kill=False, timestamp=datetime.now(timezone.utc), reason="Resume trading")
         kill_switch.apply(event)
         self.assertTrue(kill_switch.trading_enabled)
@@ -62,7 +62,7 @@ class TestKillSwitch(unittest.TestCase):
         strategy = MomentumBurstStrategy(threshold_pct=10, metric=metric)
         buffer = TickBuffer(max_ticks_per_symbol=30)
         risk_engine = RiskEngine(rules=[MaxSignalPerMinuteRule(max_signals_per_min=1000)])
-        kill_switch = KillSwitch()  # trading_enabled=True by default
+        kill_switch = KillSwitch()
         runner = StrategyRunner(strategy=strategy, buffer=buffer, metric=metric, risk_engine=risk_engine, kill_switch=kill_switch)
 
         start_time = datetime(2026, 1, 1, 10, 0, 0, tzinfo=timezone.utc)
@@ -86,12 +86,12 @@ class TestKillSwitch(unittest.TestCase):
 
         kill_switch.apply(true_event)
         self.assertFalse(kill_switch.trading_enabled)
-        kill_switch.apply(true_event)  # Applying the same event again should not change the state
+        kill_switch.apply(true_event)
         self.assertFalse(kill_switch.trading_enabled)
 
         kill_switch.apply(false_event)
         self.assertTrue(kill_switch.trading_enabled)
-        kill_switch.apply(false_event)  # Applying the same event again should not change the state
+        kill_switch.apply(false_event)
         self.assertTrue(kill_switch.trading_enabled)
 
     def test_resume_after_kill_emits_signal_only_on_fresh_ticks(self) -> None:
@@ -100,29 +100,24 @@ class TestKillSwitch(unittest.TestCase):
         strategy = AlwaysSignalStrategy()
         buffer = TickBuffer(max_ticks_per_symbol=30)
         risk_engine = RiskEngine(rules=[MaxSignalPerMinuteRule(max_signals_per_min=1000)])
-        kill_switch = KillSwitch()  # trading_enabled=True by default
+        kill_switch = KillSwitch()
         runner = StrategyRunner(strategy=strategy, buffer=buffer, metric=metric, risk_engine=risk_engine, kill_switch=kill_switch)
 
-        # Apply kill switch ON
         kill_event = BotControlEvent(kill=True, timestamp=datetime.now(timezone.utc), reason="Testing kill switch")
         kill_switch.apply(kill_event)
 
-        # Feed some ticks while kill switch is ON (these should be ignored)
         for _ in range(5):
             tick = make_tick()
             signal = runner.on_market_tick(tick)
             self.assertIsNone(signal)
 
-        # Apply kill switch OFF
         resume_event = BotControlEvent(kill=False, timestamp=datetime.now(timezone.utc), reason="Resuming trading")
         kill_switch.apply(resume_event)
 
-        # Feed a tick immediately after resuming (should not emit signal because it's not a fresh tick)
         tick_after_resume = make_tick()
         signal_after_resume = runner.on_market_tick(tick_after_resume)
         self.assertIsNone(signal_after_resume)
 
-        # Feed another tick (this should emit a signal because it's a fresh tick after resuming)
         next_tick = make_tick()
         signal_next_tick = runner.on_market_tick(next_tick)
         self.assertIsNotNone(signal_next_tick)

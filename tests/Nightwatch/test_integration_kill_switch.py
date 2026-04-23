@@ -91,20 +91,16 @@ class TestKillSwitchStopsSignalsViaNats(unittest.TestCase):
         base_ts = datetime.now(timezone.utc)
 
         async def _activate_and_verify() -> None:
-            # Wire the control subscriber to apply events to the kill switch.
             async def _on_control_event(event: BotControlEvent) -> None:
                 self.kill_switch.apply(event)
 
             await self.control_subscriber.subscribe(_on_control_event, durable="kill-switch-test")
 
-            # Wire the tick subscriber to run the strategy runner.
             async def _on_tick(tick: MarketTick) -> None:
                 self.runner.on_market_tick(tick)
 
             await self.tick_subscriber.subscribe(subject="market.tick.>", cb=_on_tick)
 
-            # Publish a rising sequence so the strategy generates at least one signal
-            # before the stop event fires.
             pre_stop_ticks = make_tick_sequence(
                 prices=[Decimal("50000"), Decimal("55001")],
                 start=base_ts,
@@ -114,10 +110,8 @@ class TestKillSwitchStopsSignalsViaNats(unittest.TestCase):
             for tick in pre_stop_ticks:
                 await self.tick_publisher.publish(tick, flush=True)
 
-            # Wait briefly for subscriber to process ticks.
             await asyncio.sleep(0.5)
 
-            # Publish a stop event and wait for the control subscriber to apply it.
             stop_event = BotControlEvent(kill=True, timestamp=datetime.now(timezone.utc), reason="integration test stop")
             await self.control_publisher.publish(stop_event)
 
@@ -129,7 +123,6 @@ class TestKillSwitchStopsSignalsViaNats(unittest.TestCase):
 
         self._run(_activate_and_verify())
 
-        # With kill switch now active, publish more ticks and assert they are suppressed.
         async def _assert_ticks_suppressed() -> None:
             suppressed_before = self.metric.get_counter_value(self.metric.signals_suppressed_total, reason="kill_switch") or 0.0
 
@@ -142,7 +135,6 @@ class TestKillSwitchStopsSignalsViaNats(unittest.TestCase):
             for tick in post_stop_ticks:
                 await self.tick_publisher.publish(tick, flush=True)
 
-            # Allow time for subscriber to process ticks.
             await asyncio.sleep(0.5)
 
             suppressed_after = self.metric.get_counter_value(self.metric.signals_suppressed_total, reason="kill_switch") or 0.0

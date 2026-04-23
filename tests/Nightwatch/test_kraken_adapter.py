@@ -195,12 +195,12 @@ class TestKrakenAdapter(unittest.TestCase):
 
     def test_no_metrics_does_not_crash(self) -> None:
         """Given no metrics injected, when a bad message arrives, then no AttributeError."""
-        adapter = KrakenAdapter()  # metrics=None
+        adapter = KrakenAdapter()
         result = adapter.parse_message({"channel": "ticker", "data": []})
         self.assertIsNone(result)
 
     def test_no_metrics_does_not_crash_with_invalid_data(self) -> None:
         """Given no metrics injected, when a bad message arrives, then no AttributeError."""
-        adapter = KrakenAdapter()  # metrics=None
+        adapter = KrakenAdapter()
         result = adapter.parse_message({"channel": "ticker", "data": ["invalid"]})
         self.assertIsNone(result)

@@ -3,16 +3,20 @@
 import logging
 from dataclasses import dataclass
 
+from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.bot_control_event import BotControlEvent
 
 LOGGER = logging.getLogger(__name__)
 
 
-@dataclass(slots=True)
+@dataclass
 class KillSwitch:
     """Holds the current trading-enabled state, updated by BotControlEvents."""
 
-    trading_enabled: bool = True
+    def __init__(self, metrics: NightwatchMetrics | None = None) -> None:
+        """Initialize with trading enabled by default."""
+        self.trading_enabled: bool = True
+        self._metrics = metrics
 
     def apply(self, event: BotControlEvent) -> None:
         """Update state from a BotControlEvent. NOT thread-safe; must be called from the asyncio event loop."""
@@ -23,3 +27,5 @@ class KillSwitch:
             event.reason,
             event.timestamp,
         )
+        if not self.trading_enabled and self._metrics is not None:
+            self._metrics.kill_switch_toggles_total.inc()

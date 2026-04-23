@@ -108,12 +108,9 @@ class TestSignalsTotalViaNats(unittest.TestCase):
             except asyncio.TimeoutError:
                 pass
 
-            # Flush remaining messages and give subscriber time to process.
             await self.publisher.client.flush()
             await asyncio.sleep(2.0)
 
-            # Feed synthetic ticks with a guaranteed large price spread so
-            # that the strategy fires regardless of real-market conditions.
             latest = self.buffer.get_latest_tick(symbol="BTC/USD")
             base_price = latest.price if latest else Decimal("50000")
             base_ts = latest.timestamp if latest else datetime.now(timezone.utc)

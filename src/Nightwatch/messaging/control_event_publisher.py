@@ -15,10 +15,8 @@ LOGGER = logging.getLogger(__name__)
 CONTROL_SUBJECT = "control.bot"
 CONTROL_STREAM_NAME = "CONTROL"
 
-# Retain the last 10 000 control events; messages older than 24 h are discarded.
-# This prevents unbounded disk growth for StorageType.FILE streams.
 _STREAM_MAX_MSGS = 10_000
-_STREAM_MAX_AGE_SECONDS = 86_400  # 24 hours in seconds
+_STREAM_MAX_AGE_SECONDS = 86_400
 
 
 class ControlEventPublisher(NatsConnector):

@@ -81,10 +81,6 @@ class TestControlEventIntegration(unittest.TestCase):
     def _run(self, coro: Coroutine[Any, Any, Any]) -> Any:
         return self.loop.run_until_complete(coro)
 
-    # ------------------------------------------------------------------
-    # Given a running JetStream-enabled NATS server
-    # ------------------------------------------------------------------
-
     def test_given_connected_publisher_when_publish_then_no_error(self) -> None:
         """Publishing a BotControlEvent via JetStream succeeds without error."""
 
@@ -105,8 +101,6 @@ class TestControlEventIntegration(unittest.TestCase):
                 received.append(e)
                 received_event.set()
 
-            # Subscribe first (DeliverPolicy.NEW means only messages arriving
-            # AFTER consumer creation are delivered), then publish.
             await self.subscriber.subscribe(on_event, durable="ts-rcv-test")
 
             original = _make_event(reason="integration test receive")
@@ -127,8 +121,6 @@ class TestControlEventIntegration(unittest.TestCase):
             delivery_count = 0
             redelivered_event = asyncio.Event()
 
-            # Use a fresh publisher / subscriber pair on the same NATS server
-            # so we can control the durable consumer independently.
             config = NatsConnectionConfig(servers=[self.nats.url])
 
             pub = ControlEventPublisher(config=config)
@@ -143,15 +135,13 @@ class TestControlEventIntegration(unittest.TestCase):
                 delivery_count += 1
                 if delivery_count >= _MIN_REDELIVERY_COUNT:
                     redelivered_event.set()
-                # Do not ack — JetStream will redeliver after ack_wait.
 
-            # Access the raw JetStream subscribe so we can skip acking manually.
             js = sub.client.jetstream()
             consumer_config = ConsumerConfig(
                 durable_name="no-ack-consumer",
                 deliver_policy=DeliverPolicy.NEW,
                 ack_policy=AckPolicy.EXPLICIT,
-                ack_wait=1.0,  # 1-second ack wait so the test runs fast
+                ack_wait=1.0,
                 max_deliver=5,
             )
 
@@ -164,7 +154,6 @@ class TestControlEventIntegration(unittest.TestCase):
 
             await pub.publish(_make_event(reason="no-ack redelivery test"))
 
-            # Drain messages without acking until we see at least 2 deliveries.
             deadline = asyncio.get_event_loop().time() + 10.0
             while not redelivered_event.is_set() and asyncio.get_event_loop().time() < deadline:
                 try:
@@ -207,7 +196,6 @@ class TestControlEventIntegration(unittest.TestCase):
         """Verify DeliverPolicy.LAST recovers state after subscriber restart."""
 
         async def _test() -> None:
-            # Publish an event, then subscribe with DeliverPolicy.LAST to get the most recent message.
             event = _make_event(reason="restart state recovery test")
             await self.publisher.publish(event)
 
@@ -233,8 +221,6 @@ class TestControlEventIntegration(unittest.TestCase):
 
         async def _test() -> None:
             await self.subscriber.subscribe(None, durable="no-callback-test")
-            # Publish an event to ensure the subscription is active, but we don't care about receiving it.
             await self.publisher.publish(_make_event(reason="no callback test"))
-            # If we reach this point without an exception, the test passes.
 
         self._run(_test())

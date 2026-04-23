@@ -9,7 +9,7 @@ from Nightwatch.models.strategy_decision import StrategyDecision
 from Nightwatch.strategies.strategy import Strategy
 
 
-class NoneStrategy(Strategy):  # type: ignore[misc]
+class NoneStrategy(Strategy):
     """A concrete implementation of the Strategy class for testing purposes."""
 
     NAME = "none_strategy"
@@ -23,7 +23,7 @@ class NoneStrategy(Strategy):  # type: ignore[misc]
         return None
 
 
-class AlwaysSignalStrategy(Strategy):  # type: ignore[misc]
+class AlwaysSignalStrategy(Strategy):
     """A concrete implementation of the Strategy class that always emits a BUY signal."""
 
     NAME = "always_signal_strategy"
