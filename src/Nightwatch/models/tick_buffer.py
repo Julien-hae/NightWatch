@@ -74,3 +74,8 @@ class TickBuffer:
     def clear_ticks(self, symbol: str) -> None:
         """Clear all ticks for *symbol*."""
         self.ticks[symbol].clear()
+
+    def clear_all_ticks(self) -> None:
+        """Clear all ticks for all symbols."""
+        for symbol in self.ticks:
+            self.ticks[symbol].clear()
