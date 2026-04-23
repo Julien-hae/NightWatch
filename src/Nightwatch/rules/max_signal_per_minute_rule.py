@@ -1,10 +1,9 @@
-# mypy: disable-error-code="import-untyped"
 """Rate-limit signals per minute for the same symbol and strategy."""
 
 from collections import deque
 from datetime import datetime
 
-from sortedcontainers import SortedDict
+from sortedcontainers import SortedDict  # type: ignore[import-untyped]
 
 from Nightwatch.models.risk_decision import RiskDecision
 from Nightwatch.models.signal import Signal
