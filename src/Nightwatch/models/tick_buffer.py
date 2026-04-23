@@ -65,3 +65,7 @@ class TickBuffer:
         """Return ticks for *symbol* that fall within the last *seconds* seconds."""
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=seconds)
         return deque(t for t in self.ticks.get(symbol, []) if t.timestamp >= cutoff)
+
+    def clear_ticks(self, symbol: str) -> None:
+        """Clear all ticks for *symbol*."""
+        self.ticks[symbol].clear()
