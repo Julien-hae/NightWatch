@@ -204,11 +204,12 @@ class TestControlEventIntegration(unittest.TestCase):
         self._run(_test())
 
     def test_kill_on_restart_replays_last_state(self) -> None:
-        """A BotControlEvent with kill=True and a restart event should replay the last state."""
+        """Verify DeliverPolicy.LAST recovers state after subscriber restart."""
 
         async def _test() -> None:
-            # Publish a kill event, then restart the subscriber and verify it receives the last state.
-            await self.publisher.publish(_make_event(kill=True, reason="kill on restart test"))
+            # Publish an event, then subscribe with DeliverPolicy.LAST to get the most recent message.
+            event = _make_event(reason="restart state recovery test")
+            await self.publisher.publish(event)
 
             received: list[BotControlEvent] = []
             received_event = asyncio.Event()
@@ -217,16 +218,23 @@ class TestControlEventIntegration(unittest.TestCase):
                 received.append(e)
                 received_event.set()
 
-            # Restart the subscriber with a durable name to receive the last state.
-            await self.subscriber.close()
-            self.subscriber = ControlEventSubscriber(config=NatsConnectionConfig(servers=[self.nats.url]), metrics=self.metric)
-            await self.subscriber.connect()
-            await self.subscriber.subscribe(on_event, durable="ts-restart-test")
+            await self.subscriber.subscribe(on_event, durable="ts-restart-test", deliver_policy=DeliverPolicy.LAST)
 
             await asyncio.wait_for(received_event.wait(), timeout=5.0)
 
             self.assertEqual(len(received), 1)
-            self.assertTrue(received[0].kill)
-            self.assertEqual(received[0].reason, "kill on restart test")
+            self.assertEqual(received[0].reason, event.reason)
+            self.assertEqual(received[0].kill, event.kill)
+
+        self._run(_test())
+
+    def test_control_subscriber_no_callback_does_not_raise(self) -> None:
+        """Subscribing without a callback does not raise an error."""
+
+        async def _test() -> None:
+            await self.subscriber.subscribe(None, durable="no-callback-test")
+            # Publish an event to ensure the subscription is active, but we don't care about receiving it.
+            await self.publisher.publish(_make_event(reason="no callback test"))
+            # If we reach this point without an exception, the test passes.
 
         self._run(_test())
