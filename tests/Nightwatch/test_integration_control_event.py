@@ -202,3 +202,31 @@ class TestControlEventIntegration(unittest.TestCase):
             self.assertEqual(_counter_value(self.metric.control_events_received_total), before_rcv + 1)
 
         self._run(_test())
+
+    def test_kill_on_restart_replays_last_state(self) -> None:
+        """A BotControlEvent with kill=True and a restart event should replay the last state."""
+
+        async def _test() -> None:
+            # Publish a kill event, then restart the subscriber and verify it receives the last state.
+            await self.publisher.publish(_make_event(kill=True, reason="kill on restart test"))
+
+            received: list[BotControlEvent] = []
+            received_event = asyncio.Event()
+
+            async def on_event(e: BotControlEvent) -> None:
+                received.append(e)
+                received_event.set()
+
+            # Restart the subscriber with a durable name to receive the last state.
+            await self.subscriber.close()
+            self.subscriber = ControlEventSubscriber(config=NatsConnectionConfig(servers=[self.nats.url]), metrics=self.metric)
+            await self.subscriber.connect()
+            await self.subscriber.subscribe(on_event, durable="ts-restart-test")
+
+            await asyncio.wait_for(received_event.wait(), timeout=5.0)
+
+            self.assertEqual(len(received), 1)
+            self.assertTrue(received[0].kill)
+            self.assertEqual(received[0].reason, "kill on restart test")
+
+        self._run(_test())
