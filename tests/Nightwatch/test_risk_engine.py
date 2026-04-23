@@ -95,7 +95,12 @@ class TestRiskEngine(unittest.TestCase):
         )
 
     def test_create_default_rule_order(self) -> None:
-        """Test that the default rules are created in the expected order ala the contract."""
+        """Test that the default rules are created in the expected order aka the contract."""
         engine = RiskEngine.create_default()
         rule_names = [r.name for r in engine._rules]
         self.assertEqual(rule_names, ["CooldownRule", "MinTradeStrengthRule", "MaxSignalPerMinuteRule"])
+
+    def test_risk_engine_empty_rules_raises_value_error(self) -> None:
+        """Test that initializing RiskEngine with an empty rules list raises a ValueError."""
+        with self.assertRaises(ValueError):
+            RiskEngine(rules=[])

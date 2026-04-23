@@ -121,3 +121,91 @@ class TestKillSwitch(unittest.TestCase):
         next_tick = make_tick()
         signal_next_tick = runner.on_market_tick(next_tick)
         self.assertIsNotNone(signal_next_tick)
+
+    def test_ready_defaults_to_true(self) -> None:
+        """Test that KillSwitch defaults to ready=True for backward compatibility."""
+        kill_switch = KillSwitch()
+        self.assertTrue(kill_switch.ready)
+
+    def test_not_ready_suppresses_signals(self) -> None:
+        """Test that StrategyRunner suppresses all signals when the kill switch is not ready."""
+        metric = NightwatchMetrics()
+        strategy = AlwaysSignalStrategy()
+        buffer = TickBuffer(max_ticks_per_symbol=30)
+        kill_switch = KillSwitch(ready=False)
+        runner = StrategyRunner(strategy=strategy, buffer=buffer, metric=metric, kill_switch=kill_switch)
+
+        tick = make_tick()
+        signal = runner.on_market_tick(tick)
+        self.assertIsNone(signal)
+
+        suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="kill_switch_not_ready") or 0.0
+        self.assertEqual(suppressed, 1.0)
+
+    def test_mark_ready_allows_signals(self) -> None:
+        """Test that after mark_ready(), signals flow normally."""
+        metric = NightwatchMetrics()
+        strategy = AlwaysSignalStrategy()
+        buffer = TickBuffer(max_ticks_per_symbol=30)
+        risk_engine = RiskEngine(rules=[MaxSignalPerMinuteRule(max_signals_per_min=1000)])
+        kill_switch = KillSwitch(ready=False)
+        runner = StrategyRunner(strategy=strategy, buffer=buffer, metric=metric, risk_engine=risk_engine, kill_switch=kill_switch)
+
+        tick1 = make_tick()
+        self.assertIsNone(runner.on_market_tick(tick1))
+
+        kill_switch.mark_ready()
+        self.assertTrue(kill_switch.ready)
+
+        tick2 = make_tick()
+        runner.on_market_tick(tick2)
+        tick3 = make_tick()
+        signal = runner.on_market_tick(tick3)
+        self.assertIsNotNone(signal)
+
+    def test_not_ready_with_kill_true_restores_killed_state(self) -> None:
+        """Test that applying a kill event while not-ready restores killed state, then marking ready keeps it killed."""
+        metric = NightwatchMetrics()
+        strategy = AlwaysSignalStrategy()
+        buffer = TickBuffer(max_ticks_per_symbol=30)
+        kill_switch = KillSwitch(ready=False)
+        runner = StrategyRunner(strategy=strategy, buffer=buffer, metric=metric, kill_switch=kill_switch)
+
+        kill_event = BotControlEvent(kill=True, timestamp=datetime.now(timezone.utc), reason="Restored from backlog")
+        kill_switch.apply(kill_event)
+        kill_switch.mark_ready()
+
+        self.assertTrue(kill_switch.ready)
+        self.assertFalse(kill_switch.trading_enabled)
+
+        tick = make_tick()
+        signal = runner.on_market_tick(tick)
+        self.assertIsNone(signal)
+        suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="kill_switch") or 0.0
+        self.assertGreater(suppressed, 0.0)
+
+    def test_kill_switch_off_then_on_then_off(self) -> None:
+        """Test that toggling the kill switch off, then on, then off again works as expected and block/allows signal on each state."""
+        metric = NightwatchMetrics()
+        strategy = AlwaysSignalStrategy()
+        buffer = TickBuffer(max_ticks_per_symbol=30)
+        risk_engine = RiskEngine(rules=[MaxSignalPerMinuteRule(max_signals_per_min=1000)])
+        kill_switch = KillSwitch()
+        runner = StrategyRunner(strategy=strategy, buffer=buffer, metric=metric, risk_engine=risk_engine, kill_switch=kill_switch)
+
+        event_off = BotControlEvent(kill=True, timestamp=datetime.now(timezone.utc), reason="Kill switch off")
+        kill_switch.apply(event_off)
+        self.assertFalse(kill_switch.trading_enabled)
+
+        event_on = BotControlEvent(kill=False, timestamp=datetime.now(timezone.utc), reason="Kill switch on")
+        kill_switch.apply(event_on)
+        self.assertTrue(kill_switch.trading_enabled)
+
+        kill_switch.apply(event_off)
+        self.assertFalse(kill_switch.trading_enabled)
+
+        tick = make_tick()
+        signal = runner.on_market_tick(tick)
+        self.assertIsNone(signal)
+        suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="kill_switch") or 0.0
+        self.assertGreater(suppressed, 0.0)

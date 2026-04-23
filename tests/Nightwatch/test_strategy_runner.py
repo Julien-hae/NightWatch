@@ -238,3 +238,39 @@ class TestStrategyRunner(unittest.TestCase):
         )
         signal2 = feed_ticks(runner, ticks2)
         self.assertIsNotNone(signal2)
+
+    def test_logging_does_not_fire_on_rejected_signal(self) -> None:
+        """When the risk engine rejects a signal, the detailed signal log should not be emitted."""
+        metric = NightwatchMetrics()
+        strategy = MomentumBurstStrategy(threshold_pct=10, metric=metric)
+        buffer = TickBuffer(max_ticks_per_symbol=30)
+        risk_engine = RiskEngine(rules=[MinTradeStrengthRule(min_strength=50.0)])
+        runner = StrategyRunner(strategy=strategy, buffer=buffer, metric=metric, risk_engine=risk_engine)
+
+        with self.assertLogs("Nightwatch.strategy_runner", level="INFO") as log:
+            ticks = make_tick_sequence(
+                prices=[Decimal("100"), Decimal("105"), Decimal("115")], start=self.start_time, interval_sec=5.0, symbol="BTC/USD"
+            )
+            for tick in ticks:
+                runner.on_market_tick(tick)
+
+        log_output = "\n".join(log.output)
+        self.assertIn("rejected by rule", log_output)
+        self.assertNotIn('"event": "signal"', log_output)
+
+    def test_strategy_runner_returns_none_when_strategy_returns_none(self) -> None:
+        """If the strategy returns None, the StrategyRunner should also return None and not log a signal."""
+        metric = NightwatchMetrics()
+        strategy = MomentumBurstStrategy(threshold_pct=10, metric=metric)
+        buffer = TickBuffer(max_ticks_per_symbol=30)
+        risk_engine = RiskEngine(rules=[MinTradeStrengthRule(min_strength=1.0)])
+        runner = StrategyRunner(strategy=strategy, buffer=buffer, metric=metric, risk_engine=risk_engine)
+
+        ticks = make_tick_sequence(
+            prices=[Decimal("100"), Decimal("101"), Decimal("102")], start=self.start_time, interval_sec=5.0, symbol="BTC/USD"
+        )
+        signal = feed_ticks(runner, ticks)
+        self.assertIsNone(signal)
+
+        suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="MinTradeStrengthRule") or 0.0
+        self.assertEqual(suppressed, 0.0)

@@ -16,6 +16,7 @@ nats-py = "^2.13.1"
 fastapi = "^0.135.1"
 prometheus-client = "^0.24.1"
 httpx = "^0.28.1"
+sortedcontainers = "^2.4.0"
 
 [tool.poetry.group.dev.dependencies]
 coverage = {extras = ["toml"], version = "~7.4"}    # Code coverage measurement for Python

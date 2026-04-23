@@ -1,7 +1,10 @@
+# mypy: disable-error-code="import-untyped"
 """Rate-limit signals per minute for the same symbol and strategy."""
 
 from collections import deque
 from datetime import datetime
+
+from sortedcontainers import SortedDict
 
 from Nightwatch.models.risk_decision import RiskDecision
 from Nightwatch.models.signal import Signal
@@ -27,21 +30,19 @@ class MaxSignalPerMinuteRule(RiskRule):
     def evaluate(self, signal: Signal) -> RiskDecision | None:
         """Reject if a signal for the same (symbol, strategy) exceeds the maximum allowed per minute."""
         key = (signal.symbol, signal.strategy)
-        last = self._last_seen.get(key)
+        last = self._last_seen.get(key, deque(maxlen=self._max_signals_per_min))
 
-        if last is not None and len(last) >= self._max_signals_per_min:
-            while last and (signal.timestamp - last[0]).total_seconds() > 60:  # noqa: PLR2004
-                last.popleft()
+        while last and (signal.timestamp - last[0]).total_seconds() > 60:  # noqa: PLR2004
+            last.popleft()
 
-            if len(last) >= self._max_signals_per_min:
-                return RiskDecision(
-                    allowed=False,
-                    symbol=signal.symbol,
-                    signal_id=signal.uid,
-                    reason="Exceeded max signals per minute",
-                    rule=self.name,
-                )
-
+        if len(last) >= self._max_signals_per_min:
+            return RiskDecision(
+                allowed=False,
+                symbol=signal.symbol,
+                signal_id=signal.uid,
+                reason="Exceeded max signals per minute",
+                rule=self.name,
+            )
         return None
 
     def confirm(self, signal: Signal) -> None:
@@ -57,6 +58,6 @@ class MaxSignalPerMinuteRule(RiskRule):
     def _cleanup_last_seen_dict(self, current_time: datetime) -> None:
         """Remove entries from _last_seen that are outside the 1-minute window."""
         cutoff = current_time.timestamp() - 60
-        keys_to_delete = [key for key, timestamps in self._last_seen.items() if not timestamps or timestamps[-1].timestamp() < cutoff]
-        for key in keys_to_delete:
-            del self._last_seen[key]
+        self._last_seen = SortedDict(
+            (key, timestamps) for key, timestamps in self._last_seen.items() if timestamps and timestamps[-1].timestamp() >= cutoff
+        )

@@ -37,7 +37,13 @@ def create_app(
                 },
                 status_code=503,
             )
-        return JSONResponse(content={"ws_connected": _health.ws_connected, "nats_connected": _health.nats_connected}, status_code=200)
+        return JSONResponse(
+            content={
+                "ws_connected": _health.ws_connected,
+                "nats_connected": _health.nats_connected,
+            },
+            status_code=200,
+        )
 
     @app.get("/metrics")
     def prometheus_metrics() -> Response:

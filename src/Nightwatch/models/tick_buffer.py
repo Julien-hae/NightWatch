@@ -1,5 +1,6 @@
 """Defines the TickBuffer Pydantic model for storing the last N MarketTick objects per symbol in a rolling buffer."""
 
+import bisect
 import logging
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
@@ -64,7 +65,10 @@ class TickBuffer:
     def get_ticks_within(self, symbol: str, seconds: float) -> deque[MarketTick]:
         """Return ticks for *symbol* that fall within the last *seconds* seconds."""
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=seconds)
-        return deque(t for t in self.ticks.get(symbol, []) if t.timestamp >= cutoff)
+        ticks: deque[MarketTick] = self.ticks.get(symbol, deque())
+        timestamps = [t.timestamp for t in ticks]
+        index = bisect.bisect_left(timestamps, cutoff)
+        return deque(list(ticks)[index:])
 
     def clear_ticks(self, symbol: str) -> None:
         """Clear all ticks for *symbol*."""
