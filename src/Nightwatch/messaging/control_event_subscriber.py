@@ -11,6 +11,7 @@ from nats.js.api import AckPolicy, ConsumerConfig, DeliverPolicy
 from nats.js.client import JetStreamContext
 from pydantic import ValidationError
 
+from Nightwatch.kill_switch import KillSwitch
 from Nightwatch.messaging.control_event_publisher import CONTROL_STREAM_NAME, CONTROL_SUBJECT
 from Nightwatch.messaging.nats_connection import NatsConnector
 from Nightwatch.metrics import NightwatchMetrics
@@ -134,6 +135,61 @@ class ControlEventSubscriber(NatsConnector):
         await self.client.flush()
         LOGGER.debug("Subscribed to '%s' with durable consumer '%s'.", CONTROL_SUBJECT, durable)
         LOGGER.debug("Watching dead-letter advisory on '%s'.", advisory_subject)
+
+    async def drain_backlog(self, kill_switch: KillSwitch, *, timeout: float = 5.0) -> int:
+        """Fetch and apply the most recent control event from JetStream before normal processing.
+
+        Uses an ephemeral consumer with ``DeliverPolicy.LAST`` so only the
+        latest event is retrieved.  After draining, the *kill_switch* is
+        marked ready so that the ``StrategyRunner`` can begin emitting
+        signals.  If no messages are pending the switch is still marked ready.
+
+        This method should be called **once at startup**, before any market
+        ticks are processed, to close the safety gap where a kill command
+        sent before a crash could be lost.
+
+        Args:
+            kill_switch: The ``KillSwitch`` instance to restore.
+            timeout: Seconds to wait for a pending message before giving up.
+
+        Returns:
+            The number of events applied (0 or 1).
+        """
+        if not self.client.is_connected:
+            LOGGER.warning("NATS subscriber is not connected. Calling connect().")
+            await self.connect()
+
+        js = self.client.jetstream()
+
+        sub = await js.subscribe(
+            subject=CONTROL_SUBJECT,
+            stream=CONTROL_STREAM_NAME,
+            config=ConsumerConfig(
+                deliver_policy=DeliverPolicy.LAST,
+                ack_policy=AckPolicy.EXPLICIT,
+            ),
+        )
+
+        applied = 0
+        try:
+            msg = await sub.next_msg(timeout=timeout)
+            try:
+                event = BotControlEvent.model_validate_json(msg.data)
+                kill_switch.apply(event)
+                await msg.ack()
+                applied = 1
+                LOGGER.info("Restored kill-switch state from backlog: trading_enabled=%s", kill_switch.trading_enabled)
+            except ValidationError as exc:
+                LOGGER.error("Failed to parse control event during backlog drain: %s", exc)
+                await msg.term()
+        except TimeoutError:
+            LOGGER.info("No pending control events in JetStream backlog.")
+        finally:
+            await sub.unsubscribe()
+
+        kill_switch.mark_ready()
+        LOGGER.info("Backlog drain complete: %d event(s) applied, kill switch ready.", applied)
+        return applied
 
     async def close(self) -> None:
         """Unsubscribe advisory and JetStream subscriptions before closing the connection.

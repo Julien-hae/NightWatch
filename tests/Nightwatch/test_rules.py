@@ -143,3 +143,40 @@ class TestRules(unittest.TestCase):
         if decision3 is None:
             rule.confirm(signal3)
         self.assertEqual(len(rule._last_seen), 1)
+
+    def test_cooldown_rule_cleanup_uses_business_time(self) -> None:
+        """Test that CooldownRule cleanup logic uses the signal timestamp, not current time."""
+        rule = CooldownRule(cooldown_seconds=1.0)
+
+        signal1 = make_signal(timestamp=self.signal.timestamp)
+        signal2 = make_signal(timestamp=self.signal.timestamp + timedelta(seconds=0.5))
+        signal3 = make_signal(timestamp=self.signal.timestamp + timedelta(seconds=1.5))
+
+        decision1 = rule.evaluate(signal1)
+        self.assertIsNone(decision1)
+        if decision1 is None:
+            rule.confirm(signal1)
+
+        decision2 = rule.evaluate(signal2)
+        self.assertIsNotNone(decision2)
+        self.assertFalse(decision2.allowed)
+
+        decision3 = rule.evaluate(signal3)
+        self.assertIsNone(decision3)
+        if decision3 is None:
+            rule.confirm(signal3)
+        self.assertEqual(len(rule._last_seen), 1)
+
+    def test_max_signal_per_minute_evicts_before_capacity(self) -> None:
+        """Test that the rule evicts old timestamps before reaching capacity."""
+        signal1 = make_signal(timestamp=self.signal.timestamp, symbol="AAPL", strategy="TestStrategy")
+        signal2 = make_signal(timestamp=self.signal.timestamp + timedelta(seconds=30), symbol="AAPL", strategy="TestStrategy")
+        signal3 = make_signal(timestamp=self.signal.timestamp + timedelta(seconds=61), symbol="AAPL", strategy="TestStrategy")
+
+        rule = MaxSignalPerMinuteRule(max_signals_per_min=2)
+        self.assertIsNone(rule.evaluate(signal1))
+        rule.confirm(signal1)
+
+        self.assertIsNone(rule.evaluate(signal2))
+        rule.confirm(signal2)
+        self.assertIsNone(rule.evaluate(signal3))

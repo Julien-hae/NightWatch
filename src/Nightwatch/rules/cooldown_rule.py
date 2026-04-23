@@ -48,7 +48,6 @@ class CooldownRule(RiskRule):
 
     def _cleanup_last_seen_dict(self, current_time: datetime) -> None:
         """Remove entries from _last_seen that are outside the cooldown window."""
-        cutoff = current_time.timestamp() - self._cooldown_seconds
-        keys_to_delete = [key for key, last in self._last_seen.items() if last.timestamp() < cutoff]
+        keys_to_delete = [key for key, last in self._last_seen.items() if (current_time - last).total_seconds() > self._cooldown_seconds]
         for key in keys_to_delete:
             del self._last_seen[key]

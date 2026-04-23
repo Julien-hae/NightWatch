@@ -32,7 +32,7 @@ class NatsConnectionConfig(BaseModel):
     reconnect_time_wait: float = 0.2
     ping_interval: int = 10
     max_outstanding_pings: int = 2
-    token: str = Field(default_factory=lambda: os.environ.get("NATS_TOKEN", ""))
+    token: str | None = Field(default_factory=lambda: os.environ.get("NATS_TOKEN", None))
     # nkeys_seed: str | None = Field(default_factory=lambda: os.environ.get("NATS_NKEY_SEED"))
 
     model_config = ConfigDict(str_max_length=255)

@@ -27,9 +27,9 @@ class RiskEngine:
                    `RiskEngine.create_default()` to get the standard production configuration.
             metrics: Optional NightwatchMetrics instance for recording metrics. If not provided, no metrics will be recorded.
         """
-        self._rules = rules
-        if len(self._rules) == 0:
+        if not rules:
             raise ValueError("RiskEngine must be initialized with at least one rule.")
+        self._rules = rules
         self._metrics = metrics
 
     @classmethod
