@@ -29,12 +29,12 @@ class TestRules(unittest.TestCase):
     def test_cooldown_rule_blocks_signal_within_cooldown(self) -> None:
         """Test that CooldownRule blocks a second signal within the cooldown period."""
         decision1 = self.cooldown_rule.evaluate(self.signal)
-        self.assertIsNone(decision1)  # First signal should be allowed
+        self.assertIsNone(decision1)
         if decision1 is None:
             self.cooldown_rule.confirm(self.signal)
 
         decision2 = self.cooldown_rule.evaluate(self.signal)
-        self.assertIsNotNone(decision2)  # Second signal should be blocked
+        self.assertIsNotNone(decision2)
         self.assertFalse(decision2.allowed)
         self.assertEqual(decision2.reason, "Cooldown active")
         self.assertEqual(decision2.rule, "CooldownRule")
@@ -43,7 +43,7 @@ class TestRules(unittest.TestCase):
         """Test that MinTradeStrengthRule blocks a signal with strength below the minimum."""
         weak_signal = make_signal(strength=1.0)
         decision = self.min_trade_strength_rule.evaluate(weak_signal)
-        self.assertIsNotNone(decision)  # Signal should be blocked
+        self.assertIsNotNone(decision)
         self.assertFalse(decision.allowed)
         self.assertEqual(decision.reason, "Trade strength below minimum")
         self.assertEqual(decision.rule, "MinTradeStrengthRule")
@@ -112,14 +112,14 @@ class TestRules(unittest.TestCase):
             rule.confirm(signal1)
 
         decision2 = rule.evaluate(signal2)
-        self.assertIsNotNone(decision2)  # Should be blocked
+        self.assertIsNotNone(decision2)
         self.assertFalse(decision2.allowed)
 
         decision3 = rule.evaluate(signal3)
-        self.assertIsNone(decision3)  # Should be allowed after cleanup
+        self.assertIsNone(decision3)
         if decision3 is None:
             rule.confirm(signal3)
-        self.assertEqual(len(rule._last_seen), 1)  # Only the entry for signal3 should remain
+        self.assertEqual(len(rule._last_seen), 1)
 
     def test_clean_up_cooldown_rule(self) -> None:
         """Test that CooldownRule cleans up old entries from _last_seen."""
@@ -135,11 +135,11 @@ class TestRules(unittest.TestCase):
             rule.confirm(signal1)
 
         decision2 = rule.evaluate(signal2)
-        self.assertIsNotNone(decision2)  # Should be blocked
+        self.assertIsNotNone(decision2)
         self.assertFalse(decision2.allowed)
 
         decision3 = rule.evaluate(signal3)
-        self.assertIsNone(decision3)  # Should be allowed after cleanup
+        self.assertIsNone(decision3)
         if decision3 is None:
             rule.confirm(signal3)
-        self.assertEqual(len(rule._last_seen), 1)  # Only the entry for signal3 should remain
+        self.assertEqual(len(rule._last_seen), 1)

@@ -1,7 +1,7 @@
 """Define the Signal model for representing Signals."""
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
 
@@ -29,6 +29,14 @@ class Signal(BaseModel):
     schema_version: int
 
     model_config = ConfigDict(str_max_length=255)
+
+    @field_validator("timestamp")
+    @classmethod
+    def timestamp_must_be_timezone_aware(cls, v: datetime) -> datetime:
+        """Require timezone-aware timestamps and normalize them to UTC."""
+        if v.tzinfo is None or v.utcoffset() is None:
+            raise ValueError("timestamp must be timezone-aware")
+        return v.astimezone(timezone.utc)
 
     @field_validator("symbol")
     @classmethod

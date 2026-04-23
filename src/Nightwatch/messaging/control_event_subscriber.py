@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any, Awaitable, Callable
 
+from nats.aio.subscription import Subscription
 from nats.js.api import AckPolicy, ConsumerConfig, DeliverPolicy
 from nats.js.client import JetStreamContext
 from pydantic import ValidationError
@@ -19,7 +21,6 @@ LOGGER = logging.getLogger(__name__)
 
 DEFAULT_DURABLE_NAME = "trade-service"
 
-# Maximum redelivery attempts for a single message before JetStream marks it as dead-lettered.
 _MAX_DELIVER = 5
 
 
@@ -36,6 +37,7 @@ class ControlEventSubscriber(NatsConnector):
         """Initialize the ControlEventSubscriber with NATS connection parameters."""
         super().__init__(config=config, metrics=metrics)
         self._subscription: JetStreamContext.PushSubscription | None = None
+        self._advisory_sub: Subscription | None = None
 
     async def subscribe(
         self,
@@ -43,6 +45,7 @@ class ControlEventSubscriber(NatsConnector):
         *,
         durable: str = DEFAULT_DURABLE_NAME,
         ack_wait: float = 30.0,
+        deliver_policy: DeliverPolicy = DeliverPolicy.LAST,
     ) -> None:
         """Subscribe to control.bot with a durable JetStream consumer.
 
@@ -56,6 +59,9 @@ class ControlEventSubscriber(NatsConnector):
             cb: Callback invoked with each successfully parsed BotControlEvent.
             durable: Name of the durable consumer (persists across restarts).
             ack_wait: Seconds JetStream waits before redelivering an unacked message.
+            deliver_policy: JetStream delivery policy for the durable consumer.
+                Defaults to DeliverPolicy.LAST so a restarted subscriber recovers
+                the most recent state without replaying the full history.
         """
         if not self.client.is_connected:
             LOGGER.warning("NATS subscriber is not connected. Calling connect().")
@@ -68,7 +74,7 @@ class ControlEventSubscriber(NatsConnector):
 
         consumer_config = ConsumerConfig(
             durable_name=durable,
-            deliver_policy=DeliverPolicy.NEW,
+            deliver_policy=deliver_policy,
             ack_policy=AckPolicy.EXPLICIT,
             ack_wait=ack_wait,
             max_deliver=_MAX_DELIVER,
@@ -96,5 +102,50 @@ class ControlEventSubscriber(NatsConnector):
             cb=_handler,
             manual_ack=True,
         )
+
+        if self._advisory_sub is not None:
+            await self._advisory_sub.unsubscribe()
+
+        advisory_subject = f"$JS.EVENT.ADVISORY.CONSUMER.MAX_DELIVERIES.{CONTROL_STREAM_NAME}.{durable}"
+
+        async def _advisory_handler(msg: Any) -> None:
+            try:
+                parsed_data: Any = json.loads(msg.data)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                data: dict[str, Any] = {}
+            else:
+                data = parsed_data if isinstance(parsed_data, dict) else {}
+            stream_seq = data.get("stream_seq", "unknown")
+            deliveries = data.get("deliveries", _MAX_DELIVER)
+            LOGGER.critical(
+                "BotControlEvent dead-lettered after %s delivery attempts "
+                "(stream=%s, consumer=%s, stream_seq=%s). "
+                "A kill command may not have been processed — manual intervention required.",
+                deliveries,
+                CONTROL_STREAM_NAME,
+                durable,
+                stream_seq,
+            )
+            if self._metrics is not None:
+                self._metrics.control_events_dead_lettered_total.inc()
+
+        self._advisory_sub = await self.client.subscribe(advisory_subject, cb=_advisory_handler)
+
         await self.client.flush()
         LOGGER.debug("Subscribed to '%s' with durable consumer '%s'.", CONTROL_SUBJECT, durable)
+        LOGGER.debug("Watching dead-letter advisory on '%s'.", advisory_subject)
+
+    async def close(self) -> None:
+        """Unsubscribe advisory and JetStream subscriptions before closing the connection.
+
+        Cleans up both the dead-letter advisory core-NATS subscription and the
+        durable JetStream push subscription so that no callbacks fire after the
+        connection is drained.
+        """
+        if self._advisory_sub is not None:
+            await self._advisory_sub.unsubscribe()
+            self._advisory_sub = None
+        if self._subscription is not None:
+            await self._subscription.unsubscribe()
+            self._subscription = None
+        await super().close()

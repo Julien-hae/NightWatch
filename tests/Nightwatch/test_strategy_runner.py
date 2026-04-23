@@ -100,7 +100,6 @@ class TestStrategyRunner(unittest.TestCase):
         risk_engine = RiskEngine(rules=[MinTradeStrengthRule(min_strength=50.0)])
         runner = StrategyRunner(strategy=strategy, buffer=buffer, metric=metric, risk_engine=risk_engine)
 
-        # delta_pct = 15%, strength = 15.0, which is below min_strength=50
         ticks = make_tick_sequence(
             prices=[Decimal("100"), Decimal("105"), Decimal("115")], start=self.start_time, interval_sec=5.0, symbol="BTC/USD"
         )
@@ -157,7 +156,6 @@ class TestStrategyRunner(unittest.TestCase):
         signal1 = feed_ticks(runner, ticks)
         self.assertIsNotNone(signal1)
 
-        # Second qualifying tick — strategy fires but MaxSignalPerMinuteRule rejects
         tick2 = make_tick(price=Decimal("135"), timestamp=self.start_time + timedelta(seconds=10))
         signal2 = runner.on_market_tick(tick2)
         self.assertIsNone(signal2)
@@ -173,7 +171,6 @@ class TestStrategyRunner(unittest.TestCase):
         risk_engine = RiskEngine(rules=[MinTradeStrengthRule(min_strength=1.0), MaxSignalPerMinuteRule(max_signals_per_min=1000)])
         runner = StrategyRunner(strategy=strategy, buffer=buffer, metric=metric, risk_engine=risk_engine)
 
-        # delta_pct = 15%, strength = 15.0 — above min_strength=1.0, within rate limit
         ticks = make_tick_sequence(
             prices=[Decimal("100"), Decimal("105"), Decimal("115")], start=self.start_time, interval_sec=5.0, symbol="BTC/USD"
         )
@@ -189,10 +186,8 @@ class TestStrategyRunner(unittest.TestCase):
         metric = NightwatchMetrics()
         strategy = MomentumBurstStrategy(threshold_pct=1, window_sec=60, metric=metric)
         buffer = TickBuffer(max_ticks_per_symbol=30)
-        # No risk_engine provided — default includes MinTradeStrengthRule(min_strength=10)
         runner = StrategyRunner(strategy=strategy, buffer=buffer, metric=metric)
 
-        # delta_pct = 5%, strength = 5.0, below default min_strength=10
         ticks = make_tick_sequence(prices=[Decimal("100"), Decimal("105")], start=self.start_time, interval_sec=5.0, symbol="BTC/USD")
         signal = feed_ticks(runner, ticks)
         self.assertIsNone(signal)
@@ -205,23 +200,41 @@ class TestStrategyRunner(unittest.TestCase):
         metric = NightwatchMetrics()
         strategy = MomentumBurstStrategy(threshold_pct=10, window_sec=60, metric=metric)
         buffer = TickBuffer(max_ticks_per_symbol=30)
-        # CooldownRule is first; MinTradeStrengthRule second
         risk_engine = RiskEngine(rules=[CooldownRule(cooldown_seconds=999), MinTradeStrengthRule(min_strength=50.0)])
         runner = StrategyRunner(strategy=strategy, buffer=buffer, metric=metric, risk_engine=risk_engine)
 
-        # Signal 1: delta_pct=55% → strength=55 ≥ 50 → passes both rules → CooldownRule confirm() called
         ticks = make_tick_sequence(prices=[Decimal("100"), Decimal("155")], start=self.start_time, interval_sec=5.0, symbol="BTC/USD")
         signal1 = feed_ticks(runner, ticks)
         self.assertIsNotNone(signal1)
         self.assertEqual(metric.get_counter_value(metric.signals_suppressed_total, reason="MinTradeStrengthRule") or 0.0, 0.0)
 
-        # Signal 2 at t+65s: window covers [t+5s..t+65s], start_price=155, end_price=172
-        # delta_pct ≈ 10.97% → strategy fires; strength ≈ 10.97 < 50 → MinTradeStrengthRule would reject
-        # but CooldownRule fires first (65s < 999s cooldown)
         tick2 = make_tick(price=Decimal("172"), timestamp=self.start_time + timedelta(seconds=65))
         runner.on_market_tick(tick2)
         cooldown_suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="CooldownRule") or 0.0
         self.assertEqual(cooldown_suppressed, 1.0)
-        # MinTradeStrengthRule count unchanged — proves CooldownRule rejected first, short-circuiting the chain
         min_suppressed_after = metric.get_counter_value(metric.signals_suppressed_total, reason="MinTradeStrengthRule") or 0.0
         self.assertEqual(min_suppressed_after, 0.0)
+
+    def test_buffer_not_contaminated_after_resume(self) -> None:
+        """After a pause and resume, the buffer should not contain stale ticks that could trigger false signals."""
+        metric = NightwatchMetrics()
+        strategy = MomentumBurstStrategy(threshold_pct=10, window_sec=60, metric=metric)
+        buffer = TickBuffer(max_ticks_per_symbol=30)
+        risk_engine = RiskEngine(rules=[MinTradeStrengthRule(min_strength=1.0)])
+        runner = StrategyRunner(strategy=strategy, buffer=buffer, metric=metric, risk_engine=risk_engine)
+
+        ticks1 = make_tick_sequence(
+            prices=[Decimal("100"), Decimal("105"), Decimal("115")], start=self.start_time, interval_sec=5.0, symbol="BTC/USD"
+        )
+        signal1 = feed_ticks(runner, ticks1)
+        self.assertIsNotNone(signal1)
+
+        buffer.clear_ticks("BTC/USD")
+        pause_duration = timedelta(seconds=120)
+        resume_time = self.start_time + pause_duration
+
+        ticks2 = make_tick_sequence(
+            prices=[Decimal("200"), Decimal("210"), Decimal("230")], start=resume_time, interval_sec=5.0, symbol="BTC/USD"
+        )
+        signal2 = feed_ticks(runner, ticks2)
+        self.assertIsNotNone(signal2)

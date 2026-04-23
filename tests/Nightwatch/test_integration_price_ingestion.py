@@ -92,7 +92,6 @@ class TestPriceIngestionIntegration(unittest.TestCase):
             self.assertEqual(payload["source"], "Kraken")
             self.assertEqual(payload["schema_version"], 1)
 
-            # Round-trip: reconstruct a MarketTick from the payload
             reconstructed = MarketTick(**payload)
             self.assertEqual(reconstructed.uid, tick.uid)
             self.assertEqual(Decimal(reconstructed.price), Decimal(tick.price))
