@@ -35,10 +35,7 @@ class StrategyRunner:
     def on_market_tick(self, tick: MarketTick) -> Signal | None:
         """Process a market tick and determine if a trading signal should be emitted. Return None if Kill switch is active."""
         first_tick = self._buffer.get_first_tick(tick.symbol)
-        if not self._kill_switch.trading_enabled:
-            if self._metric:
-                self._metric.signals_suppressed_total.labels(reason="kill_switch").inc()
-            LOGGER.debug("Kill switch is active — suppressing tick for %s", tick.symbol)
+        if self._is_suppressed_by_kill_switch(tick):
             return None
 
         self._buffer.add_tick(tick)
@@ -88,3 +85,12 @@ class StrategyRunner:
             }
             LOGGER.info(json.dumps(log, default=str))
         return signal
+
+    def _is_suppressed_by_kill_switch(self, tick: MarketTick) -> bool:
+        """Check if the kill switch is active and log suppression if so."""
+        if not self._kill_switch.trading_enabled:
+            if self._metric:
+                self._metric.signals_suppressed_total.labels(reason="kill_switch").inc()
+            LOGGER.debug("Kill switch active — suppressing %s", tick.symbol)
+            return True
+        return False
