@@ -1,3 +1,4 @@
+# mypy: disable-error-code="import-untyped"
 """Unit tests for the KillSwitch model in the Nightwatch application."""
 
 import unittest
@@ -76,3 +77,12 @@ class TestKillSwitch(unittest.TestCase):
         self.assertIsNotNone(signal)
         suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="kill_switch") or 0.0
         self.assertEqual(suppressed, 0.0)
+
+    def test_kill_switch_idempotent(self) -> None:
+        """Test that applying the same BotControlEvent multiple times does not change the state after the first application."""
+        kill_switch = KillSwitch()
+        event = BotControlEvent(kill=True, timestamp=datetime.now(timezone.utc), reason="Idempotent test")
+        kill_switch.apply(event)
+        self.assertFalse(kill_switch.trading_enabled)
+        kill_switch.apply(event)  # Applying the same event again should not change the state
+        self.assertFalse(kill_switch.trading_enabled)
