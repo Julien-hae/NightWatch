@@ -110,9 +110,11 @@ class ControlEventSubscriber(NatsConnector):
 
         async def _advisory_handler(msg: Any) -> None:
             try:
-                data: dict[str, Any] = json.loads(msg.data)
+                parsed_data: Any = json.loads(msg.data)
             except (json.JSONDecodeError, UnicodeDecodeError):
-                data = {}
+                data: dict[str, Any] = {}
+            else:
+                data = parsed_data if isinstance(parsed_data, dict) else {}
             stream_seq = data.get("stream_seq", "unknown")
             deliveries = data.get("deliveries", _MAX_DELIVER)
             LOGGER.critical(
