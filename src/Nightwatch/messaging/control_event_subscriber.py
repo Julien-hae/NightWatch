@@ -68,7 +68,7 @@ class ControlEventSubscriber(NatsConnector):
 
         consumer_config = ConsumerConfig(
             durable_name=durable,
-            deliver_policy=DeliverPolicy.NEW,
+            deliver_policy=DeliverPolicy.LAST,
             ack_policy=AckPolicy.EXPLICIT,
             ack_wait=ack_wait,
             max_deliver=_MAX_DELIVER,
