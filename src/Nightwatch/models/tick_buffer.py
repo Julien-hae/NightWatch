@@ -66,9 +66,10 @@ class TickBuffer:
         """Return ticks for *symbol* that fall within the last *seconds* seconds."""
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=seconds)
         ticks: deque[MarketTick] = self.ticks.get(symbol, deque())
-        timestamps = [t.timestamp for t in ticks]
+        tick_list = list(ticks)
+        timestamps = [tick.timestamp for tick in tick_list]
         index = bisect.bisect_left(timestamps, cutoff)
-        return deque(list(ticks)[index:])
+        return deque(tick_list[index:])
 
     def clear_ticks(self, symbol: str) -> None:
         """Clear all ticks for *symbol*."""
