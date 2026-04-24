@@ -27,9 +27,6 @@ class TestKillSwitch(unittest.TestCase):
         self.always_strategy = AlwaysSignalStrategy()
         self.buffer = TickBuffer(max_ticks_per_symbol=30)
         self.metric = NightwatchMetrics()
-        self.strategy = AlwaysSignalStrategy()
-        self.buffer = TickBuffer(max_ticks_per_symbol=30)
-        self.risk_engine = RiskEngine(rules=[MaxSignalPerMinuteRule(max_signals_per_min=1000)])
         self.kill_switch = KillSwitch()
 
     def test_trading_enabled_by_default(self) -> None:

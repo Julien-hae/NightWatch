@@ -192,7 +192,8 @@ class TestRules(unittest.TestCase):
         self.assertIsNone(rule.evaluate(signal1))
         rule.confirm(signal1)
 
-        self.assertIsNotNone(rule.evaluate(signal2))
-        self.assertFalse(rule.evaluate(signal2).allowed)
+        decision2 = rule.evaluate(signal2)
+        self.assertIsNotNone(decision2)
+        self.assertFalse(decision2.allowed)
 
         self.assertIsNone(rule.evaluate(signal3))

@@ -164,9 +164,10 @@ class ControlEventSubscriber(NatsConnector):
             await self.connect()
 
         js = self.client.jetstream()
+        drain_consumer_name = f"drain-consumer-{self._uid}"
 
         sub = await js.subscribe(
-            durable=f"drain-consumer-{self._uid}",
+            durable=drain_consumer_name,
             subject=CONTROL_SUBJECT,
             stream=CONTROL_STREAM_NAME,
             config=ConsumerConfig(
@@ -192,6 +193,11 @@ class ControlEventSubscriber(NatsConnector):
             LOGGER.info("No pending control events in JetStream backlog.")
         finally:
             await sub.unsubscribe()
+            try:
+                await js.delete_consumer(CONTROL_STREAM_NAME, drain_consumer_name)
+                LOGGER.debug("Deleted ephemeral drain consumer '%s'.", drain_consumer_name)
+            except Exception as exc:  # noqa: BLE001
+                LOGGER.warning("Could not delete drain consumer '%s': %s", drain_consumer_name, exc)
 
         kill_switch.mark_ready()
         LOGGER.info("Backlog drain complete: %d event(s) applied, kill switch ready.", applied)
