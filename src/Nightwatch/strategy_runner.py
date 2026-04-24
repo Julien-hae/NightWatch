@@ -47,7 +47,7 @@ class StrategyRunner:
             self._buffer.clear_all_ticks()
             self._buffer.add_tick(tick)
             first_tick = None
-            LOGGER.info("Kill switch resumed — cleared buffer for %s", tick.symbol)
+            LOGGER.info("Kill switch resumed — cleared buffer for all symbols (triggered by %s)", tick.symbol)
 
         if not first_tick:
             if self._metric:
