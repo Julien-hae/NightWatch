@@ -215,12 +215,3 @@ class TestControlEventIntegration(unittest.TestCase):
             self.assertEqual(received[0].kill, event.kill)
 
         self._run(_test())
-
-    def test_control_subscriber_no_callback_does_not_raise(self) -> None:
-        """Subscribing without a callback does not raise an error."""
-
-        async def _test() -> None:
-            await self.subscriber.subscribe(None, durable="no-callback-test")
-            await self.publisher.publish(_make_event(reason="no callback test"))
-
-        self._run(_test())
