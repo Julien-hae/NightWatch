@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
 from typing import Any, Awaitable, Callable
 
 from nats.aio.subscription import Subscription
@@ -39,6 +40,7 @@ class ControlEventSubscriber(NatsConnector):
         super().__init__(config=config, metrics=metrics)
         self._subscription: JetStreamContext.PushSubscription | None = None
         self._advisory_sub: Subscription | None = None
+        self._uid = uuid.uuid4()
 
     async def subscribe(
         self,
@@ -154,6 +156,7 @@ class ControlEventSubscriber(NatsConnector):
         Returns:
             The number of events applied (0 or 1).
         """
+        LOGGER.info("Draining JetStream backlog for control events with timeout %.1f seconds...", timeout)
         if not self.client.is_connected:
             LOGGER.warning("NATS subscriber is not connected. Calling connect().")
             await self.connect()
@@ -161,6 +164,7 @@ class ControlEventSubscriber(NatsConnector):
         js = self.client.jetstream()
 
         sub = await js.subscribe(
+            durable=f"drain-consumer-{self._uid}",
             subject=CONTROL_SUBJECT,
             stream=CONTROL_STREAM_NAME,
             config=ConsumerConfig(
@@ -168,6 +172,7 @@ class ControlEventSubscriber(NatsConnector):
                 ack_policy=AckPolicy.EXPLICIT,
             ),
         )
+        LOGGER.info("Subscribed to JetStream with ephemeral consumer to drain backlog: %s", sub)
 
         applied = 0
         try:
