@@ -42,7 +42,7 @@ class ControlEventSubscriber(NatsConnector):
 
     async def subscribe(
         self,
-        cb: Callable[[BotControlEvent], Awaitable[Any]] | None = None,
+        cb: Callable[[BotControlEvent], Awaitable[Any]],
         *,
         durable: str = DEFAULT_DURABLE_NAME,
         ack_wait: float = 30.0,
@@ -92,8 +92,7 @@ class ControlEventSubscriber(NatsConnector):
                 return
             if self._metrics:
                 self._metrics.control_events_received_total.inc()
-            if cb is not None:
-                await cb(event)
+            await cb(event)
             await msg.ack()
 
         self._subscription = await js.subscribe(

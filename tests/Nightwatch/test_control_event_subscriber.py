@@ -146,7 +146,10 @@ class TestControlEventSubscriber(unittest.TestCase):
         mock_client = self._build_mock_client(advisory_cbs)
         subscriber_no_metrics._nc = mock_client
 
-        self._run(subscriber_no_metrics.subscribe(None, durable="no-metrics-consumer"))
+        async def _noop(e: BotControlEvent) -> None:
+            pass
+
+        self._run(subscriber_no_metrics.subscribe(_noop, durable="no-metrics-consumer"))
 
         payload = json.dumps({"stream_seq": 7, "deliveries": _MAX_DELIVER}).encode()
         with self.assertLogs("Nightwatch.messaging.control_event_subscriber", level=logging.CRITICAL):
@@ -197,15 +200,3 @@ class TestControlEventSubscriber(unittest.TestCase):
         self.assertEqual(len(received), 1)
         self.assertEqual(received[0].reason, "unit test")
         self.assertEqual(_counter_value(self.metrics.control_events_received_total), 1.0)
-
-    def test_message_handler_acks_valid_event_without_callback(self) -> None:
-        """Handler acks a valid BotControlEvent even when no user callback is provided."""
-        _, msg_cb = self._subscribe_and_get_callbacks(cb=None)
-
-        event = BotControlEvent(kill=False, timestamp=datetime.now(timezone.utc), reason="no-cb test")
-        mock_msg = self._make_msg(event.model_dump_json().encode())
-
-        self._run(msg_cb(mock_msg))
-
-        mock_msg.ack.assert_called_once()
-        mock_msg.term.assert_not_called()
