@@ -22,7 +22,7 @@ from Nightwatch.models.nats_config import NatsConnectionConfig
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_DURABLE_NAME = "trade-service"
-
+_DEFAULT_DELIVER_POLICY = DeliverPolicy.LAST
 _MAX_DELIVER = 5
 
 
@@ -48,7 +48,7 @@ class ControlEventSubscriber(NatsConnector):
         *,
         durable: str = DEFAULT_DURABLE_NAME,
         ack_wait: float = 30.0,
-        deliver_policy: DeliverPolicy = DeliverPolicy.LAST,
+        deliver_policy: DeliverPolicy = _DEFAULT_DELIVER_POLICY,
     ) -> None:
         """Subscribe to control.bot with a durable JetStream consumer.
 
@@ -63,9 +63,11 @@ class ControlEventSubscriber(NatsConnector):
             durable: Name of the durable consumer (persists across restarts).
             ack_wait: Seconds JetStream waits before redelivering an unacked message.
             deliver_policy: JetStream delivery policy for the durable consumer.
-                Defaults to DeliverPolicy.LAST so a restarted subscriber recovers
+                Defaults to _DEFAULT_DELIVER_POLICY so a restarted subscriber recovers
                 the most recent state without replaying the full history.
         """
+        if cb is None:
+            raise ValueError("Callback function must be provided for subscription.")
         if not self.client.is_connected:
             LOGGER.warning("NATS subscriber is not connected. Calling connect().")
             await self.connect()
@@ -168,7 +170,7 @@ class ControlEventSubscriber(NatsConnector):
             subject=CONTROL_SUBJECT,
             stream=CONTROL_STREAM_NAME,
             config=ConsumerConfig(
-                deliver_policy=DeliverPolicy.LAST,
+                deliver_policy=_DEFAULT_DELIVER_POLICY,
                 ack_policy=AckPolicy.EXPLICIT,
             ),
         )

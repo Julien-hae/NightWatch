@@ -5,7 +5,9 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
+from Nightwatch.kill_switch import KillSwitch
 from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.models.bot_control_event import BotControlEvent
 from Nightwatch.models.tick_buffer import TickBuffer
 from Nightwatch.risk_engine import RiskEngine
 from Nightwatch.rules.cooldown_rule import CooldownRule
@@ -274,3 +276,58 @@ class TestStrategyRunner(unittest.TestCase):
 
         suppressed = metric.get_counter_value(metric.signals_suppressed_total, reason="MinTradeStrengthRule") or 0.0
         self.assertEqual(suppressed, 0.0)
+
+    def test_given_btc_kill_resume_then_eth_buffer_is_cleared(self) -> None:
+        """When a kill command is received for one symbol, the buffer for a different symbol should also be cleared to prevent contamination."""
+        metric = NightwatchMetrics()
+        strategy = MomentumBurstStrategy(threshold_pct=10, metric=metric)
+        buffer = TickBuffer(max_ticks_per_symbol=30)
+        risk_engine = RiskEngine(rules=[MinTradeStrengthRule(min_strength=1.0)])
+        kill_switch = KillSwitch()
+        runner = StrategyRunner(strategy=strategy, buffer=buffer, metric=metric, risk_engine=risk_engine, kill_switch=kill_switch)
+
+        btc_ticks = make_tick_sequence(
+            prices=[Decimal("100"), Decimal("105"), Decimal("115")], start=self.start_time, interval_sec=5.0, symbol="BTC/USD"
+        )
+        eth_ticks = make_tick_sequence(
+            prices=[Decimal("10"), Decimal("10.5"), Decimal("11")], start=self.start_time, interval_sec=5.0, symbol="ETH/USD"
+        )
+
+        feed_ticks(runner, btc_ticks)
+        feed_ticks(runner, eth_ticks)
+
+        kill_switch.apply(BotControlEvent(kill=True, reason="test", timestamp=self.start_time))
+        runner.on_market_tick(btc_ticks[-1])  # suppressed; sets _was_killed = True
+        kill_switch.apply(BotControlEvent(kill=False, reason="test", timestamp=self.start_time))
+
+        signal_eth = feed_ticks(runner, eth_ticks)
+        self.assertIsNotNone(signal_eth)
+
+    def test_given_btc_kill_resume_log_mentions_all_symbols(self) -> None:
+        """When a kill command is received for one symbol, the log should mention all symbols whose buffers were cleared."""
+        metric = NightwatchMetrics()
+        strategy = MomentumBurstStrategy(threshold_pct=10, metric=metric)
+        buffer = TickBuffer(max_ticks_per_symbol=30)
+        risk_engine = RiskEngine(rules=[MinTradeStrengthRule(min_strength=1.0)])
+        kill_switch = KillSwitch()
+        runner = StrategyRunner(strategy=strategy, buffer=buffer, metric=metric, risk_engine=risk_engine, kill_switch=kill_switch)
+
+        btc_ticks = make_tick_sequence(
+            prices=[Decimal("100"), Decimal("105"), Decimal("115")], start=self.start_time, interval_sec=5.0, symbol="BTC/USD"
+        )
+        eth_ticks = make_tick_sequence(
+            prices=[Decimal("10"), Decimal("10.5"), Decimal("11")], start=self.start_time, interval_sec=5.0, symbol="ETH/USD"
+        )
+
+        feed_ticks(runner, btc_ticks)
+        feed_ticks(runner, eth_ticks)
+
+        kill_switch.apply(BotControlEvent(kill=True, reason="test", timestamp=self.start_time))
+        runner.on_market_tick(btc_ticks[-1])  # suppressed; sets _was_killed = True
+        kill_switch.apply(BotControlEvent(kill=False, reason="test", timestamp=self.start_time))
+
+        with self.assertLogs("Nightwatch.strategy_runner", level="INFO") as log:
+            runner.on_market_tick(eth_ticks[0])  # first tick after resume triggers buffer clear log
+
+        log_output = "\n".join(log.output)
+        self.assertIn("Buffers cleared for symbols: BTC/USD, ETH/USD", log_output)

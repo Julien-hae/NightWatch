@@ -180,3 +180,19 @@ class TestRules(unittest.TestCase):
         self.assertIsNone(rule.evaluate(signal2))
         rule.confirm(signal2)
         self.assertIsNone(rule.evaluate(signal3))
+
+    def test_cleanup_max_signal_per_minute_uses_business_time(self) -> None:
+        """Test that MaxSignalPerMinuteRule cleanup logic uses the signal timestamp, not current time."""
+        rule = MaxSignalPerMinuteRule(max_signals_per_min=1)
+
+        signal1 = make_signal(timestamp=self.signal.timestamp, symbol="AAPL", strategy="TestStrategy")
+        signal2 = make_signal(timestamp=self.signal.timestamp + timedelta(seconds=30), symbol="AAPL", strategy="TestStrategy")
+        signal3 = make_signal(timestamp=self.signal.timestamp + timedelta(seconds=61), symbol="AAPL", strategy="TestStrategy")
+
+        self.assertIsNone(rule.evaluate(signal1))
+        rule.confirm(signal1)
+
+        self.assertIsNotNone(rule.evaluate(signal2))
+        self.assertFalse(rule.evaluate(signal2).allowed)
+
+        self.assertIsNone(rule.evaluate(signal3))
