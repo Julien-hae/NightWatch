@@ -56,7 +56,8 @@ class MaxSignalPerMinuteRule(RiskRule):
 
     def _cleanup_last_seen_dict(self, current_time: datetime) -> None:
         """Remove entries from _last_seen that are outside the 1-minute window."""
-        cutoff = current_time.timestamp() - 60
         self._last_seen = SortedDict(
-            (key, timestamps) for key, timestamps in self._last_seen.items() if timestamps and timestamps[-1].timestamp() >= cutoff
+            (key, timestamps)
+            for key, timestamps in self._last_seen.items()
+            if timestamps and (current_time - timestamps[-1]).total_seconds() <= 60  # noqa: PLR2004
         )

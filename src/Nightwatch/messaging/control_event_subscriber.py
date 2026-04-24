@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
 from typing import Any, Awaitable, Callable
 
 from nats.aio.subscription import Subscription
@@ -21,7 +22,7 @@ from Nightwatch.models.nats_config import NatsConnectionConfig
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_DURABLE_NAME = "trade-service"
-
+_DEFAULT_DELIVER_POLICY = DeliverPolicy.LAST
 _MAX_DELIVER = 5
 
 
@@ -39,14 +40,15 @@ class ControlEventSubscriber(NatsConnector):
         super().__init__(config=config, metrics=metrics)
         self._subscription: JetStreamContext.PushSubscription | None = None
         self._advisory_sub: Subscription | None = None
+        self._uid = uuid.uuid4()
 
     async def subscribe(
         self,
-        cb: Callable[[BotControlEvent], Awaitable[Any]] | None = None,
+        cb: Callable[[BotControlEvent], Awaitable[Any]],
         *,
         durable: str = DEFAULT_DURABLE_NAME,
         ack_wait: float = 30.0,
-        deliver_policy: DeliverPolicy = DeliverPolicy.LAST,
+        deliver_policy: DeliverPolicy = _DEFAULT_DELIVER_POLICY,
     ) -> None:
         """Subscribe to control.bot with a durable JetStream consumer.
 
@@ -61,9 +63,11 @@ class ControlEventSubscriber(NatsConnector):
             durable: Name of the durable consumer (persists across restarts).
             ack_wait: Seconds JetStream waits before redelivering an unacked message.
             deliver_policy: JetStream delivery policy for the durable consumer.
-                Defaults to DeliverPolicy.LAST so a restarted subscriber recovers
+                Defaults to _DEFAULT_DELIVER_POLICY so a restarted subscriber recovers
                 the most recent state without replaying the full history.
         """
+        if cb is None:
+            raise ValueError("Callback function must be provided for subscription.")
         if not self.client.is_connected:
             LOGGER.warning("NATS subscriber is not connected. Calling connect().")
             await self.connect()
@@ -92,8 +96,7 @@ class ControlEventSubscriber(NatsConnector):
                 return
             if self._metrics:
                 self._metrics.control_events_received_total.inc()
-            if cb is not None:
-                await cb(event)
+            await cb(event)
             await msg.ack()
 
         self._subscription = await js.subscribe(
@@ -155,20 +158,24 @@ class ControlEventSubscriber(NatsConnector):
         Returns:
             The number of events applied (0 or 1).
         """
+        LOGGER.info("Draining JetStream backlog for control events with timeout %.1f seconds...", timeout)
         if not self.client.is_connected:
             LOGGER.warning("NATS subscriber is not connected. Calling connect().")
             await self.connect()
 
         js = self.client.jetstream()
+        drain_consumer_name = f"drain-consumer-{self._uid}"
 
         sub = await js.subscribe(
+            durable=drain_consumer_name,
             subject=CONTROL_SUBJECT,
             stream=CONTROL_STREAM_NAME,
             config=ConsumerConfig(
-                deliver_policy=DeliverPolicy.LAST,
+                deliver_policy=_DEFAULT_DELIVER_POLICY,
                 ack_policy=AckPolicy.EXPLICIT,
             ),
         )
+        LOGGER.info("Subscribed to JetStream with ephemeral consumer to drain backlog: %s", sub)
 
         applied = 0
         try:
@@ -186,6 +193,11 @@ class ControlEventSubscriber(NatsConnector):
             LOGGER.info("No pending control events in JetStream backlog.")
         finally:
             await sub.unsubscribe()
+            try:
+                await js.delete_consumer(CONTROL_STREAM_NAME, drain_consumer_name)
+                LOGGER.debug("Deleted ephemeral drain consumer '%s'.", drain_consumer_name)
+            except Exception as exc:  # noqa: BLE001
+                LOGGER.warning("Could not delete drain consumer '%s': %s", drain_consumer_name, exc)
 
         kill_switch.mark_ready()
         LOGGER.info("Backlog drain complete: %d event(s) applied, kill switch ready.", applied)

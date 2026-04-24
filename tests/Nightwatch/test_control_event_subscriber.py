@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from prometheus_client import CollectorRegistry
 
+from Nightwatch.kill_switch import KillSwitch
 from Nightwatch.messaging.control_event_subscriber import _MAX_DELIVER, ControlEventSubscriber
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.bot_control_event import BotControlEvent
@@ -72,6 +73,10 @@ class TestControlEventSubscriber(unittest.TestCase):
         mock_client.flush = AsyncMock()
         return mock_client
 
+    @staticmethod
+    async def _noop_cb(_event: BotControlEvent) -> None:
+        """Default no-op callback for tests that don't need to inspect received events."""
+
     def _subscribe_and_get_callbacks(
         self,
         cb: Any = None,
@@ -82,7 +87,7 @@ class TestControlEventSubscriber(unittest.TestCase):
         msg_cbs: list[Any] = []
         mock_client = self._build_mock_client(advisory_cbs, msg_cbs)
         self.subscriber._nc = mock_client
-        self._run(self.subscriber.subscribe(cb, durable=durable))
+        self._run(self.subscriber.subscribe(cb if cb is not None else self._noop_cb, durable=durable))
         self.assertEqual(len(advisory_cbs), 1, "Expected exactly one advisory callback to be registered")
         self.assertEqual(len(msg_cbs), 1, "Expected exactly one message callback to be registered")
         return advisory_cbs[0], msg_cbs[0]
@@ -146,7 +151,10 @@ class TestControlEventSubscriber(unittest.TestCase):
         mock_client = self._build_mock_client(advisory_cbs)
         subscriber_no_metrics._nc = mock_client
 
-        self._run(subscriber_no_metrics.subscribe(None, durable="no-metrics-consumer"))
+        async def _noop(e: BotControlEvent) -> None:
+            pass
+
+        self._run(subscriber_no_metrics.subscribe(_noop, durable="no-metrics-consumer"))
 
         payload = json.dumps({"stream_seq": 7, "deliveries": _MAX_DELIVER}).encode()
         with self.assertLogs("Nightwatch.messaging.control_event_subscriber", level=logging.CRITICAL):
@@ -198,14 +206,29 @@ class TestControlEventSubscriber(unittest.TestCase):
         self.assertEqual(received[0].reason, "unit test")
         self.assertEqual(_counter_value(self.metrics.control_events_received_total), 1.0)
 
-    def test_message_handler_acks_valid_event_without_callback(self) -> None:
-        """Handler acks a valid BotControlEvent even when no user callback is provided."""
-        _, msg_cb = self._subscribe_and_get_callbacks(cb=None)
+    def test_subscribe_without_callback_raises_value_error(self) -> None:
+        """Calling subscribe() without a callback should raise a ValueError."""
+        with self.assertRaises(ValueError):
+            self._run(self.subscriber.subscribe(cb=None))  # type: ignore[arg-type]
 
-        event = BotControlEvent(kill=False, timestamp=datetime.now(timezone.utc), reason="no-cb test")
+    def test_drain_backlog_logs_restored_state(self) -> None:
+        """Draining the backlog emits an info log with the restored kill-switch state."""
+        event = BotControlEvent(kill=True, timestamp=datetime.now(timezone.utc), reason="backlog drain test")
         mock_msg = self._make_msg(event.model_dump_json().encode())
+        mock_msg.ack = AsyncMock()
+        mock_sub = AsyncMock()
+        mock_sub.next_msg = AsyncMock(return_value=mock_msg)
+        mock_sub.unsubscribe = AsyncMock()
+        mock_js = AsyncMock()
+        mock_js.subscribe = AsyncMock(return_value=mock_sub)
+        mock_client = MagicMock()
+        mock_client.is_connected = True
+        mock_client.jetstream.return_value = mock_js
 
-        self._run(msg_cb(mock_msg))
+        self.subscriber._nc = mock_client
+        kill_switch = KillSwitch()
 
-        mock_msg.ack.assert_called_once()
-        mock_msg.term.assert_not_called()
+        with self.assertLogs("Nightwatch.messaging.control_event_subscriber", level=logging.INFO) as log_ctx:
+            self._run(self.subscriber.drain_backlog(kill_switch))
+
+        self.assertTrue(any("Restored" in line and "trading_enabled=False" in line for line in log_ctx.output))

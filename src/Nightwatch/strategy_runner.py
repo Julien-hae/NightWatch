@@ -43,11 +43,8 @@ class StrategyRunner:
             return None
 
         if self._was_killed:
-            self._was_killed = False
-            self._buffer.clear_all_ticks()
-            self._buffer.add_tick(tick)
+            self._handle_resume(tick)
             first_tick = None
-            LOGGER.info("Kill switch resumed — cleared buffer for %s", tick.symbol)
 
         if not first_tick:
             if self._metric:
@@ -113,3 +110,11 @@ class StrategyRunner:
             source=tick.source,
             schema_version=tick.schema_version,
         )
+
+    def _handle_resume(self, tick: MarketTick) -> None:
+        """Clear stale pre-kill state and warm up the buffer with the first post-resume tick."""
+        self._was_killed = False
+        symbols_cleared = sorted(symbol for symbol, ticks in self._buffer.ticks.items() if ticks)
+        self._buffer.clear_all_ticks()
+        self._buffer.add_tick(tick)
+        LOGGER.info("Buffers cleared for symbols: %s", ", ".join(symbols_cleared) if symbols_cleared else "none")
