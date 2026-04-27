@@ -2,7 +2,7 @@
 
 import uuid
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
 
 class RiskDecision(BaseModel):
@@ -34,3 +34,12 @@ class RiskDecision(BaseModel):
         if allowed is True and v is not None:
             raise ValueError("reason and rule must be None when allowed is True")
         return v
+
+    @model_validator(mode="after")
+    def reason_rule_consistent_with_allowed(self) -> "RiskDecision":
+        """Ensure that reason and rule are set according to allowed."""
+        if not self.allowed and (self.reason is None or self.rule is None):
+            raise ValueError("reason and rule must be provided when allowed is False")
+        if self.allowed and (self.reason is not None or self.rule is not None):
+            raise ValueError("reason and rule must be None when allowed is True")
+        return self
