@@ -60,8 +60,7 @@ class ControlEventPublisher(NatsConnector):
             event: The BotControlEvent to publish.
         """
         if not self.client.is_connected:
-            LOGGER.warning("NATS publisher is not connected. Calling connect().")
-            await self.connect()
+            raise ConnectionError("ControlEventPublisher is not connected. Call connect() first.")
 
         js = self.client.jetstream()
         payload = event.model_dump_json().encode("utf-8")
