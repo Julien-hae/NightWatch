@@ -50,3 +50,10 @@ class MarketTickSubscriber(NatsConnector):
 
         self._subscription = await self._nc.subscribe(subject=subject, cb=_handler)
         await self.client.flush()
+
+    async def close(self) -> None:
+        """Unsubscribe before draining the NATS connection."""
+        if self._subscription is not None:
+            await self._subscription.unsubscribe()
+            self._subscription = None
+        await super().close()
