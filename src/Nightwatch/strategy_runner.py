@@ -114,7 +114,7 @@ class StrategyRunner:
     def _handle_resume(self, tick: MarketTick) -> None:
         """Clear stale pre-kill state and warm up the buffer with the first post-resume tick."""
         self._was_killed = False
-        symbols_cleared = sorted(symbol for symbol, ticks in self._buffer.ticks.items() if ticks)
+        symbols_cleared = [symbol for symbol, ticks in self._buffer.ticks.items() if ticks]
         self._buffer.clear_all_ticks()
         self._buffer.add_tick(tick)
         LOGGER.info("Buffers cleared for symbols: %s", ", ".join(symbols_cleared) if symbols_cleared else "none")
