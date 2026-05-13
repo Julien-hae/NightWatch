@@ -4,6 +4,8 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
+from pydantic import ValidationError
+
 from Nightwatch.models.order import Order, Status
 from Nightwatch.models.signal import Side
 from tests.fixtures.order_factory import make_order
@@ -33,10 +35,10 @@ class TestOrder(unittest.TestCase):
 
     def test_status_only_accepts_valid_values(self) -> None:
         """Test that the 'status' attribute only accepts valid Status values."""
-        with self.assertRaises(AttributeError):
-            make_order(status=Status.ERROR)  # type: ignore[attr-defined]
+        with self.assertRaises(ValidationError):
+            make_order(status="ERROR")  # type: ignore[arg-type]
 
-    def test_qty_non_negative(self) -> None:
+    def test_qty_strictly_positive(self) -> None:
         """Test that the 'qty' attribute must be strictly positive (> 0)."""
         with self.assertRaises(ValueError):
             make_order(qty=Decimal("0.0"))

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from enum import Enum
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from Nightwatch.models.signal import Side
 
@@ -27,6 +27,8 @@ class Order(BaseModel):
     qty: Decimal = Field(gt=0)
     status: Status
     created_at: datetime
+
+    model_config = ConfigDict(str_max_length=255)
 
     @field_validator("symbol")
     @classmethod

@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from Nightwatch.models.signal import Side
 
@@ -20,6 +20,8 @@ class Fill(BaseModel):
     price: Decimal = Field(gt=0)
     fee: Decimal = Field(ge=0)
     ts: datetime
+
+    model_config = ConfigDict(str_max_length=255)
 
     @field_validator("symbol")
     @classmethod

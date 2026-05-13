@@ -12,12 +12,14 @@ from Nightwatch.models.signal import Side
 def make_order(
     symbol: str = "BTC/USD",
     side: Side = Side.BUY,
-    signal_id: uuid.UUID = uuid.uuid4(),
+    signal_id: uuid.UUID | None = None,
     qty: Decimal = Decimal("1.0"),
     status: Status = Status.NEW,
     **kwargs: Any,
 ) -> Order:
     """Helper function to create an Order with default values for testing."""
+    if signal_id is None:
+        signal_id = uuid.uuid4()
     return Order(
         symbol=symbol,
         side=side,

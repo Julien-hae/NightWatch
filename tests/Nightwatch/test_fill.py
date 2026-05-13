@@ -33,14 +33,14 @@ class TestFill(unittest.TestCase):
         self.assertEqual(self.fill.price, Decimal("50000.0"))
         self.assertEqual(self.fill.fee, Decimal("0.0"))
 
-    def test_price_non_negative(self) -> None:
+    def test_price_strictly_positive(self) -> None:
         """Test that the 'price' attribute must be strictly positive (> 0)."""
         with self.assertRaises(ValueError):
             make_fill(price=Decimal("0.0"))
         with self.assertRaises(ValueError):
             make_fill(price=Decimal("-1.0"))
 
-    def test_qty_non_negative(self) -> None:
+    def test_qty_strictly_positive(self) -> None:
         """Test that the 'qty' attribute must be strictly positive (> 0)."""
         with self.assertRaises(ValueError):
             make_fill(qty=Decimal("0.0"))

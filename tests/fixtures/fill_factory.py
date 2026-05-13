@@ -12,13 +12,15 @@ from Nightwatch.models.signal import Side
 def make_fill(
     symbol: str = "BTC/USD",
     side: Side = Side.BUY,
-    order_id: uuid.UUID = uuid.uuid4(),
+    order_id: uuid.UUID | None = None,
     qty: Decimal = Decimal("1.0"),
     price: Decimal = Decimal("50000.0"),
     fee: Decimal = Decimal("0.0"),
     **kwargs: Any,
 ) -> Fill:
     """Helper function to create a Fill with default values for testing."""
+    if order_id is None:
+        order_id = uuid.uuid4()
     return Fill(
         symbol=symbol,
         side=side,
