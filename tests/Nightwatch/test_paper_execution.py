@@ -69,6 +69,16 @@ class TestPaperExecute(unittest.TestCase):
         self.assertEqual(fill.price, Decimal("60000"))
         self.assertEqual(fill.fee, Decimal("30"))
 
+    def test_order_status_transitions_to_filled(self) -> None:
+        self.assertEqual(self.order.status, Status.NEW)
+        paper_execute(self.order, Decimal("50000"), self.fee_model)
+        self.assertEqual(self.order.status, Status.FILLED)
+
+    def test_order_status_unchanged_on_rejected_price(self) -> None:
+        with self.assertRaises(ValueError):
+            paper_execute(self.order, Decimal("0"), self.fee_model)
+        self.assertEqual(self.order.status, Status.NEW)
+
 
 if __name__ == "__main__":
     unittest.main()

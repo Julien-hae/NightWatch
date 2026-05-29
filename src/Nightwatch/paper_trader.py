@@ -85,8 +85,7 @@ class PaperTrader:
             self._metrics.orders_created_total.labels(symbol=order.symbol, side=order.side.value).inc()
 
         last_price = self._portfolio.last_price(order.symbol)
-        if last_price is None:
-            raise ValueError(f"Cannot execute order for {order.symbol}: no last price available")
+        assert last_price is not None  # guaranteed by create_order_from_signal
         self._log_order_created(order, last_price)
 
         fill = paper_execute(order, last_price, self._fee_model)
@@ -141,4 +140,7 @@ class PaperTrader:
         self._metrics.cash_balance.set(float(self._portfolio.cash))
         for symbol, qty in self._portfolio.positions.items():
             self._metrics.position_qty.labels(symbol=symbol).set(float(qty))
+            last_price = self._portfolio.last_price(symbol)
+            if last_price is not None:
+                self._metrics.equity_per_symbol.labels(symbol=symbol).set(float(qty * last_price))
         self._metrics.equity.set(float(self._portfolio.equity()))

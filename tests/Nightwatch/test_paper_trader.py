@@ -103,6 +103,10 @@ class TestPaperTraderProcessSignal(unittest.TestCase):
             float(portfolio.position_qty("BTC/USD")),
         )
         self.assertAlmostEqual(metrics.equity._value.get(), float(portfolio.equity()))
+        self.assertAlmostEqual(
+            metrics.equity_per_symbol.labels(symbol="BTC/USD")._value.get(),
+            float(portfolio.position_qty("BTC/USD") * Decimal("50000")),
+        )
 
     def test_sell_without_position_returns_none(self) -> None:
         portfolio = make_portfolio(cash=Decimal("2000"), last_prices={"BTC/USD": Decimal("50000")})
@@ -216,6 +220,7 @@ class TestMetricsEndpointAfterPaperTrade(unittest.TestCase):
         self.assertIn('position_qty{symbol="BTC/USD"}', body)
         self.assertIn("cash_balance", body)
         self.assertIn("equity", body)
+        self.assertIn('equity_per_symbol{symbol="BTC/USD"}', body)
 
 
 if __name__ == "__main__":

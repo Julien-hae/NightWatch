@@ -13,6 +13,7 @@ If no last price is available for the symbol, no order can be sized and a
 
 import logging
 import uuid
+from collections import OrderedDict
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -41,16 +42,27 @@ class SignalDeduplicator:
     created. Subsequent calls to :meth:`is_duplicate` for the same id return
     ``True`` and (optionally) increment a ``duplicates_total`` Prometheus
     counter so callers can monitor duplication.
+
+    The tracker is bounded: at most ``max_entries`` signal ids are retained,
+    with the oldest entry evicted when the limit is exceeded (LRU). This
+    prevents unbounded memory growth in long-running services.
     """
 
-    def __init__(self, duplicates_counter: Counter | None = None) -> None:
+    DEFAULT_MAX_ENTRIES = 10_000
+
+    def __init__(self, duplicates_counter: Counter | None = None, max_entries: int = DEFAULT_MAX_ENTRIES) -> None:
         """Initialise an empty deduplicator.
 
         Args:
             duplicates_counter: Optional Prometheus counter incremented each
                 time a duplicate signal id is observed.
+            max_entries: Maximum number of signal ids retained. Must be > 0.
+                Defaults to :attr:`DEFAULT_MAX_ENTRIES`.
         """
-        self._processed: set[uuid.UUID] = set()
+        if max_entries <= 0:
+            raise ValueError("max_entries must be strictly positive")
+        self._processed: OrderedDict[uuid.UUID, None] = OrderedDict()
+        self._max_entries = max_entries
         self._duplicates_counter = duplicates_counter
 
     def is_duplicate(self, signal_id: uuid.UUID) -> bool:
@@ -62,7 +74,9 @@ class SignalDeduplicator:
 
     def mark_processed(self, signal_id: uuid.UUID) -> None:
         """Record ``signal_id`` as processed so future occurrences are duplicates."""
-        self._processed.add(signal_id)
+        self._processed[signal_id] = None
+        if len(self._processed) > self._max_entries:
+            self._processed.popitem(last=False)
 
 
 def create_order_from_signal(

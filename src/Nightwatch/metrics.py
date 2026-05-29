@@ -36,6 +36,7 @@ class NightwatchMetrics:
     cash_balance: Gauge = field(init=False)
     position_qty: Gauge = field(init=False)
     equity: Gauge = field(init=False)
+    equity_per_symbol: Gauge = field(init=False)
 
     def __post_init__(self) -> None:
         """Create Prometheus counters bound to the instance registry."""
@@ -159,6 +160,12 @@ class NightwatchMetrics:
         self.equity = Gauge(
             "equity",
             "Current total equity of the paper trading portfolio (cash + position value)",
+            registry=self.registry,
+        )
+        self.equity_per_symbol = Gauge(
+            "equity_per_symbol",
+            "Market value of the held position per symbol (qty * last_price)",
+            labelnames=["symbol"],
             registry=self.registry,
         )
 

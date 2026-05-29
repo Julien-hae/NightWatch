@@ -156,6 +156,26 @@ class TestCreateOrderFromSignalDeduplication(unittest.TestCase):
         order = create_order_from_signal(self.signal, self.portfolio, self.config, deduplicator)
         self.assertIsNotNone(order)
 
+    def test_lru_eviction_when_max_entries_exceeded(self) -> None:
+        deduplicator = SignalDeduplicator(max_entries=2)
+        first = make_signal(symbol="BTC/USD", side=Side.BUY)
+        second = make_signal(symbol="BTC/USD", side=Side.BUY)
+        third = make_signal(symbol="BTC/USD", side=Side.BUY)
+
+        for sig in (first, second, third):
+            create_order_from_signal(sig, self.portfolio, self.config, deduplicator)
+
+        # `first` was evicted (LRU) so it is no longer recognised as a duplicate.
+        self.assertFalse(deduplicator.is_duplicate(first.uid))
+        self.assertTrue(deduplicator.is_duplicate(second.uid))
+        self.assertTrue(deduplicator.is_duplicate(third.uid))
+
+    def test_max_entries_must_be_positive(self) -> None:
+        with self.assertRaises(ValueError):
+            SignalDeduplicator(max_entries=0)
+        with self.assertRaises(ValueError):
+            SignalDeduplicator(max_entries=-1)
+
 
 if __name__ == "__main__":
     unittest.main()

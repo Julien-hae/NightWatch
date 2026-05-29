@@ -6,7 +6,7 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field
 
 from Nightwatch.models.fill import Fill
-from Nightwatch.models.order import Order
+from Nightwatch.models.order import Order, Status
 
 
 class PercentageFeeModel(BaseModel):
@@ -42,7 +42,8 @@ def paper_execute(order: Order, last_price: Decimal, fee_model: PercentageFeeMod
         fee_model: Fee model used to compute the trading fee.
 
     Returns:
-        A :class:`Fill` representing the simulated execution.
+        A :class:`Fill` representing the simulated execution. The order's
+        ``status`` is transitioned to :attr:`Status.FILLED` as a side effect.
 
     Raises:
         ValueError: If ``last_price`` is not strictly positive.
@@ -50,7 +51,7 @@ def paper_execute(order: Order, last_price: Decimal, fee_model: PercentageFeeMod
     if last_price <= 0:
         raise ValueError("last_price must be strictly positive")
     fee = fee_model.calculate(order.qty, last_price)
-    return Fill(
+    fill = Fill(
         side=order.side,
         symbol=order.symbol,
         order_id=order.order_id,
@@ -59,3 +60,5 @@ def paper_execute(order: Order, last_price: Decimal, fee_model: PercentageFeeMod
         fee=fee,
         ts=datetime.now(timezone.utc),
     )
+    order.status = Status.FILLED
+    return fill
