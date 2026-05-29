@@ -13,7 +13,7 @@ def make_portfolio(
 ) -> Portfolio:
     """Helper function to create a Portfolio with default values for testing."""
     return Portfolio(
-        positions=positions or {},
-        last_prices=last_prices or {},
+        positions={} if positions is None else positions,
+        last_prices={} if last_prices is None else last_prices,
         **kwargs,
     )
