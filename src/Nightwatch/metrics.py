@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from prometheus_client import CollectorRegistry, Counter
+from prometheus_client import CollectorRegistry, Counter, Gauge
 
 
 @dataclass
@@ -30,6 +30,11 @@ class NightwatchMetrics:
     control_events_dead_lettered_total: Counter = field(init=False)
     kill_switch_toggles_total: Counter = field(init=False)
     signals_duplicates_total: Counter = field(init=False)
+    orders_created_total: Counter = field(init=False)
+    orders_filled_total: Counter = field(init=False)
+    portfolio_cash: Gauge = field(init=False)
+    portfolio_position: Gauge = field(init=False)
+    portfolio_equity: Gauge = field(init=False)
 
     def __post_init__(self) -> None:
         """Create Prometheus counters bound to the instance registry."""
@@ -119,6 +124,34 @@ class NightwatchMetrics:
         self.signals_duplicates_total = Counter(
             "signals_duplicates_total",
             "Total number of duplicate signals ignored by the order factory",
+            registry=self.registry,
+        )
+        self.orders_created_total = Counter(
+            "orders_created_total",
+            "Total number of orders created from approved signals",
+            labelnames=["symbol", "side"],
+            registry=self.registry,
+        )
+        self.orders_filled_total = Counter(
+            "orders_filled_total",
+            "Total number of orders filled by the paper executor",
+            labelnames=["symbol", "side"],
+            registry=self.registry,
+        )
+        self.portfolio_cash = Gauge(
+            "portfolio_cash",
+            "Current cash balance held by the paper trading portfolio",
+            registry=self.registry,
+        )
+        self.portfolio_position = Gauge(
+            "portfolio_position",
+            "Current position quantity held by the paper trading portfolio per symbol",
+            labelnames=["symbol"],
+            registry=self.registry,
+        )
+        self.portfolio_equity = Gauge(
+            "portfolio_equity",
+            "Current total equity of the paper trading portfolio (cash + position value)",
             registry=self.registry,
         )
 
