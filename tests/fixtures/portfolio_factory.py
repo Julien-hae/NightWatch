@@ -3,7 +3,7 @@
 from decimal import Decimal
 from typing import Any
 
-from Nightwatch.models.portfolio import Portfolio
+from Nightwatch.models.portfolio import Portfolio  # type: ignore[import-untyped]
 
 
 def make_portfolio(
