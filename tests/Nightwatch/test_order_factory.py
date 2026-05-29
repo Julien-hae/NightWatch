@@ -3,8 +3,9 @@
 import unittest
 from decimal import Decimal
 
+from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.order import Status
-from Nightwatch.models.order_factory import OrderFactoryConfig, create_order_from_signal
+from Nightwatch.models.order_factory import OrderFactoryConfig, SignalDeduplicator, create_order_from_signal
 from Nightwatch.models.signal import Side
 from tests.fixtures.portfolio_factory import make_portfolio
 from tests.fixtures.signal_factory import make_signal
@@ -104,6 +105,56 @@ class TestCreateOrderFromSignalNoPrice(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             create_order_from_signal(signal, portfolio, config)
+
+
+class TestCreateOrderFromSignalDeduplication(unittest.TestCase):
+    """Tests for idempotent processing of signals via SignalDeduplicator."""
+
+    def setUp(self) -> None:
+        self.config = OrderFactoryConfig(order_notional=Decimal("100"))
+        self.portfolio = make_portfolio(last_prices={"BTC/USD": Decimal("50000")})
+        self.signal = make_signal(symbol="BTC/USD", side=Side.BUY)
+
+    def test_duplicate_signal_returns_none(self) -> None:
+        deduplicator = SignalDeduplicator()
+
+        first = create_order_from_signal(self.signal, self.portfolio, self.config, deduplicator)
+        second = create_order_from_signal(self.signal, self.portfolio, self.config, deduplicator)
+
+        self.assertIsNotNone(first)
+        self.assertIsNone(second)
+
+    def test_distinct_signals_both_create_orders(self) -> None:
+        deduplicator = SignalDeduplicator()
+        other = make_signal(symbol="BTC/USD", side=Side.BUY)
+
+        first = create_order_from_signal(self.signal, self.portfolio, self.config, deduplicator)
+        second = create_order_from_signal(other, self.portfolio, self.config, deduplicator)
+
+        self.assertIsNotNone(first)
+        self.assertIsNotNone(second)
+        assert first is not None and second is not None
+        self.assertNotEqual(first.signal_id, second.signal_id)
+
+    def test_duplicate_increments_duplicates_counter(self) -> None:
+        metrics = NightwatchMetrics()
+        deduplicator = SignalDeduplicator(duplicates_counter=metrics.signals_duplicates_total)
+
+        create_order_from_signal(self.signal, self.portfolio, self.config, deduplicator)
+        create_order_from_signal(self.signal, self.portfolio, self.config, deduplicator)
+        create_order_from_signal(self.signal, self.portfolio, self.config, deduplicator)
+
+        self.assertEqual(metrics.signals_duplicates_total._value.get(), 2.0)
+
+    def test_failed_order_creation_does_not_mark_processed(self) -> None:
+        deduplicator = SignalDeduplicator()
+        portfolio_without_price = make_portfolio()
+
+        with self.assertRaises(ValueError):
+            create_order_from_signal(self.signal, portfolio_without_price, self.config, deduplicator)
+
+        order = create_order_from_signal(self.signal, self.portfolio, self.config, deduplicator)
+        self.assertIsNotNone(order)
 
 
 if __name__ == "__main__":
