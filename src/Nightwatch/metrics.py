@@ -32,9 +32,10 @@ class NightwatchMetrics:
     signals_duplicates_total: Counter = field(init=False)
     orders_created_total: Counter = field(init=False)
     orders_filled_total: Counter = field(init=False)
-    portfolio_cash: Gauge = field(init=False)
-    portfolio_position: Gauge = field(init=False)
-    portfolio_equity: Gauge = field(init=False)
+    fees_paid_total: Counter = field(init=False)
+    cash_balance: Gauge = field(init=False)
+    position_qty: Gauge = field(init=False)
+    equity: Gauge = field(init=False)
 
     def __post_init__(self) -> None:
         """Create Prometheus counters bound to the instance registry."""
@@ -138,19 +139,25 @@ class NightwatchMetrics:
             labelnames=["symbol", "side"],
             registry=self.registry,
         )
-        self.portfolio_cash = Gauge(
-            "portfolio_cash",
+        self.fees_paid_total = Counter(
+            "fees_paid_total",
+            "Cumulative fees paid by the paper trading portfolio",
+            labelnames=["symbol"],
+            registry=self.registry,
+        )
+        self.cash_balance = Gauge(
+            "cash_balance",
             "Current cash balance held by the paper trading portfolio",
             registry=self.registry,
         )
-        self.portfolio_position = Gauge(
-            "portfolio_position",
+        self.position_qty = Gauge(
+            "position_qty",
             "Current position quantity held by the paper trading portfolio per symbol",
             labelnames=["symbol"],
             registry=self.registry,
         )
-        self.portfolio_equity = Gauge(
-            "portfolio_equity",
+        self.equity = Gauge(
+            "equity",
             "Current total equity of the paper trading portfolio (cash + position value)",
             registry=self.registry,
         )

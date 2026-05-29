@@ -1,9 +1,13 @@
 """Unit and integration tests for the PaperTrader paper trading pipeline."""
 
+import json
 import unittest
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from fastapi.testclient import TestClient
+
+from Nightwatch.api import create_app
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.order_factory import OrderFactoryConfig
 from Nightwatch.models.paper_execution import PercentageFeeModel
@@ -27,6 +31,20 @@ def _build_paper_trader(portfolio: Portfolio, metrics: NightwatchMetrics | None 
         fee_model=PercentageFeeModel(rate=Decimal("0.001")),
         metrics=metrics,
     )
+
+
+def _extract_json_event(records: list[str], event_name: str) -> dict[str, str]:
+    for record in records:
+        _, _, payload = record.partition("INFO:Nightwatch.paper_trader:")
+        if not payload:
+            continue
+        try:
+            data = json.loads(payload)
+        except json.JSONDecodeError:
+            continue
+        if data.get("event") == event_name:
+            return data  # type: ignore[no-any-return]
+    raise AssertionError(f"event {event_name!r} not found in logs: {records}")
 
 
 class TestPaperTraderProcessSignal(unittest.TestCase):
@@ -58,13 +76,14 @@ class TestPaperTraderProcessSignal(unittest.TestCase):
         self.assertIsNotNone(first)
         self.assertIsNone(second)
 
-    def test_metrics_track_orders_and_equity(self) -> None:
+    def test_metrics_track_orders_fees_and_equity(self) -> None:
         metrics = NightwatchMetrics()
         portfolio = make_portfolio(cash=Decimal("2000"), last_prices={"BTC/USD": Decimal("50000")})
         trader = _build_paper_trader(portfolio, metrics)
         signal = make_signal(symbol="BTC/USD", side=Side.BUY)
 
-        trader.process_signal(signal)
+        fill = trader.process_signal(signal)
+        assert fill is not None
 
         self.assertEqual(
             metrics.get_counter_value(metrics.orders_created_total, symbol="BTC/USD", side="BUY"),
@@ -74,8 +93,16 @@ class TestPaperTraderProcessSignal(unittest.TestCase):
             metrics.get_counter_value(metrics.orders_filled_total, symbol="BTC/USD", side="BUY"),
             1.0,
         )
-        self.assertAlmostEqual(metrics.portfolio_cash._value.get(), float(portfolio.cash))
-        self.assertAlmostEqual(metrics.portfolio_equity._value.get(), float(portfolio.equity()))
+        self.assertAlmostEqual(
+            metrics.get_counter_value(metrics.fees_paid_total, symbol="BTC/USD") or 0.0,
+            float(fill.fee),
+        )
+        self.assertAlmostEqual(metrics.cash_balance._value.get(), float(portfolio.cash))
+        self.assertAlmostEqual(
+            metrics.position_qty.labels(symbol="BTC/USD")._value.get(),
+            float(portfolio.position_qty("BTC/USD")),
+        )
+        self.assertAlmostEqual(metrics.equity._value.get(), float(portfolio.equity()))
 
     def test_sell_without_position_returns_none(self) -> None:
         portfolio = make_portfolio(cash=Decimal("2000"), last_prices={"BTC/USD": Decimal("50000")})
@@ -88,17 +115,27 @@ class TestPaperTraderProcessSignal(unittest.TestCase):
         self.assertEqual(portfolio.cash, Decimal("2000"))
         self.assertEqual(portfolio.position_qty("BTC/USD"), Decimal("0"))
 
-    def test_logs_emit_order_created_and_filled(self) -> None:
+    def test_logs_contain_required_keys(self) -> None:
         portfolio = make_portfolio(cash=Decimal("2000"), last_prices={"BTC/USD": Decimal("50000")})
         trader = _build_paper_trader(portfolio)
         signal = make_signal(symbol="BTC/USD", side=Side.BUY)
 
         with self.assertLogs("Nightwatch.paper_trader", level="INFO") as log:
-            trader.process_signal(signal)
+            fill = trader.process_signal(signal)
+        assert fill is not None
 
-        output = "\n".join(log.output)
-        self.assertIn("ORDER_CREATED", output)
-        self.assertIn("ORDER_FILLED", output)
+        created = _extract_json_event(log.output, "order_created")
+        for key in ("order_id", "signal_id", "symbol", "side", "qty", "price"):
+            self.assertIn(key, created)
+
+        filled = _extract_json_event(log.output, "order_filled")
+        for key in ("order_id", "fill_id", "symbol", "side", "qty", "price", "fee", "cash", "pos", "equity"):
+            self.assertIn(key, filled)
+        self.assertEqual(filled["order_id"], created["order_id"])
+        self.assertEqual(filled["fill_id"], str(fill.fill_id))
+        self.assertEqual(filled["cash"], str(portfolio.cash))
+        self.assertEqual(filled["pos"], str(portfolio.position_qty("BTC/USD")))
+        self.assertEqual(filled["equity"], str(portfolio.equity()))
 
     def test_observe_price_updates_last_price_and_equity(self) -> None:
         metrics = NightwatchMetrics()
@@ -108,7 +145,7 @@ class TestPaperTraderProcessSignal(unittest.TestCase):
         trader.observe_price("BTC/USD", Decimal("60000"))
 
         self.assertEqual(portfolio.last_price("BTC/USD"), Decimal("60000"))
-        self.assertAlmostEqual(metrics.portfolio_equity._value.get(), float(Decimal("1000") + Decimal("0.5") * Decimal("60000")))
+        self.assertAlmostEqual(metrics.equity._value.get(), float(Decimal("1000") + Decimal("0.5") * Decimal("60000")))
 
 
 class TestStrategyRunnerPaperTradingPipeline(unittest.TestCase):
@@ -152,8 +189,33 @@ class TestStrategyRunnerPaperTradingPipeline(unittest.TestCase):
         self.assertGreater(portfolio.position_qty("BTC/USD"), Decimal("0"))
         self.assertLess(portfolio.cash, starting_cash)
         output = "\n".join(log.output)
-        self.assertIn("ORDER_CREATED", output)
-        self.assertIn("ORDER_FILLED", output)
+        self.assertIn("order_created", output)
+        self.assertIn("order_filled", output)
+
+
+class TestMetricsEndpointAfterPaperTrade(unittest.TestCase):
+    """Integration test: scrape /metrics after a simulated paper trade."""
+
+    def test_metrics_endpoint_exposes_paper_trading_series(self) -> None:
+        metrics = NightwatchMetrics()
+        portfolio = make_portfolio(cash=Decimal("2000"), last_prices={"BTC/USD": Decimal("50000")})
+        trader = _build_paper_trader(portfolio, metrics)
+        trader.process_signal(make_signal(symbol="BTC/USD", side=Side.BUY))
+
+        client = TestClient(create_app(metrics=metrics))
+        try:
+            response = client.get("/metrics")
+        finally:
+            client.close()
+
+        self.assertEqual(response.status_code, 200)
+        body = response.text
+        self.assertIn('orders_created_total{side="BUY",symbol="BTC/USD"} 1.0', body)
+        self.assertIn('orders_filled_total{side="BUY",symbol="BTC/USD"} 1.0', body)
+        self.assertIn('fees_paid_total{symbol="BTC/USD"}', body)
+        self.assertIn('position_qty{symbol="BTC/USD"}', body)
+        self.assertIn("cash_balance", body)
+        self.assertIn("equity", body)
 
 
 if __name__ == "__main__":

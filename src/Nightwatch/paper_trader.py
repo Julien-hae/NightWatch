@@ -61,7 +61,7 @@ class PaperTrader:
         """Record the latest market price for a symbol and refresh equity metrics."""
         self._portfolio.last_prices[symbol] = price
         if self._metrics is not None:
-            self._metrics.portfolio_equity.set(float(self._portfolio.equity()))
+            self._metrics.equity.set(float(self._portfolio.equity()))
 
     def process_signal(self, signal: Signal) -> Fill | None:
         """Process an approved signal end-to-end and return the resulting fill, if any.
@@ -81,32 +81,34 @@ class PaperTrader:
         )
         if order is None:
             return None
-        self._log_order_created(order)
         if self._metrics is not None:
             self._metrics.orders_created_total.labels(symbol=order.symbol, side=order.side.value).inc()
 
         last_price = self._portfolio.last_price(order.symbol)
         if last_price is None:
             raise ValueError(f"Cannot execute order for {order.symbol}: no last price available")
+        self._log_order_created(order, last_price)
 
         fill = paper_execute(order, last_price, self._fee_model)
         self._portfolio.apply_fill(fill)
-        self._log_order_filled(order, fill)
         if self._metrics is not None:
             self._metrics.orders_filled_total.labels(symbol=order.symbol, side=order.side.value).inc()
+            self._metrics.fees_paid_total.labels(symbol=order.symbol).inc(float(fill.fee))
         self._refresh_portfolio_metrics()
+        self._log_order_filled(order, fill)
         return fill
 
-    def _log_order_created(self, order: Order) -> None:
+    def _log_order_created(self, order: Order, price: Decimal) -> None:
         LOGGER.info(
             json.dumps(
                 {
-                    "event": "ORDER_CREATED",
+                    "event": "order_created",
                     "order_id": str(order.order_id),
                     "signal_id": str(order.signal_id),
                     "symbol": order.symbol,
                     "side": order.side.value,
                     "qty": str(order.qty),
+                    "price": str(price),
                 },
                 default=str,
             )
@@ -116,16 +118,17 @@ class PaperTrader:
         LOGGER.info(
             json.dumps(
                 {
-                    "event": "ORDER_FILLED",
+                    "event": "order_filled",
                     "order_id": str(order.order_id),
                     "fill_id": str(fill.fill_id),
+                    "signal_id": str(order.signal_id),
                     "symbol": fill.symbol,
                     "side": fill.side.value,
                     "qty": str(fill.qty),
                     "price": str(fill.price),
                     "fee": str(fill.fee),
                     "cash": str(self._portfolio.cash),
-                    "position": str(self._portfolio.position_qty(fill.symbol)),
+                    "pos": str(self._portfolio.position_qty(fill.symbol)),
                     "equity": str(self._portfolio.equity()),
                 },
                 default=str,
@@ -135,7 +138,7 @@ class PaperTrader:
     def _refresh_portfolio_metrics(self) -> None:
         if self._metrics is None:
             return
-        self._metrics.portfolio_cash.set(float(self._portfolio.cash))
+        self._metrics.cash_balance.set(float(self._portfolio.cash))
         for symbol, qty in self._portfolio.positions.items():
-            self._metrics.portfolio_position.labels(symbol=symbol).set(float(qty))
-        self._metrics.portfolio_equity.set(float(self._portfolio.equity()))
+            self._metrics.position_qty.labels(symbol=symbol).set(float(qty))
+        self._metrics.equity.set(float(self._portfolio.equity()))
