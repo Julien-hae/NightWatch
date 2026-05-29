@@ -9,6 +9,7 @@ from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.signal import Signal
 from Nightwatch.models.strategy_decision import StrategyDecision
 from Nightwatch.models.tick_buffer import TickBuffer
+from Nightwatch.paper_trader import PaperTrader
 from Nightwatch.risk_engine import RiskEngine
 from Nightwatch.strategies.strategy import Strategy
 
@@ -25,6 +26,7 @@ class StrategyRunner:
         metric: NightwatchMetrics | None = None,
         risk_engine: RiskEngine | None = None,
         kill_switch: KillSwitch | None = None,
+        paper_trader: PaperTrader | None = None,
     ) -> None:
         """Initializes the StrategyRunner with the given strategy, tick buffer, and optional metrics."""
         self._strategy = strategy
@@ -32,12 +34,15 @@ class StrategyRunner:
         self._metric = metric
         self._risk_engine = risk_engine if risk_engine is not None else RiskEngine.create_default(metrics=self._metric)
         self._kill_switch = kill_switch if kill_switch is not None else KillSwitch()
+        self._paper_trader = paper_trader
         self._was_killed: bool = False
 
     def on_market_tick(self, tick: MarketTick) -> Signal | None:
         """Process a market tick and determine if a trading signal should be emitted. Return None if Kill switch is active."""
         first_tick = self._buffer.get_first_tick(tick.symbol)
         self._buffer.add_tick(tick)
+        if self._paper_trader is not None:
+            self._paper_trader.observe_price(tick.symbol, tick.price)
         if self._is_suppressed_by_kill_switch(tick):
             self._was_killed = True
             return None
@@ -82,6 +87,8 @@ class StrategyRunner:
             "threshold_pct": signal.rationale.get("threshold_pct", None),
         }
         LOGGER.info(json.dumps(log, default=str))
+        if self._paper_trader is not None:
+            self._paper_trader.process_signal(signal)
         return signal
 
     def _is_suppressed_by_kill_switch(self, tick: MarketTick) -> bool:
