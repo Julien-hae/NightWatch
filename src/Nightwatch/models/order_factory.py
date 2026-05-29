@@ -50,16 +50,15 @@ def create_order_from_signal(
 
     Raises:
         ValueError: If no last price is known for ``signal.symbol`` or the
-            last price is not positive, and a quantity therefore cannot be
+            last price is not positive for a BUY signal, and a quantity therefore cannot be
             computed safely.
     """
     last_price = portfolio.last_price(signal.symbol)
     if last_price is None:
         raise ValueError(f"Cannot size order for {signal.symbol}: no last price available")
-    if last_price <= 0:
-        raise ValueError(f"Cannot size order for {signal.symbol}: last price must be positive, got {last_price}")
-
     if signal.side is Side.BUY:
+        if last_price <= 0:
+            raise ValueError(f"Cannot size order for {signal.symbol}: last price must be positive, got {last_price}")
         qty = config.order_notional / last_price
     else:
         qty = portfolio.position_qty(signal.symbol)
