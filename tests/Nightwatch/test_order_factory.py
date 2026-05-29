@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`Nightwatch.order_factory`."""
+"""Unit tests for :mod:`Nightwatch.models.order_factory`."""
 
 import unittest
 from decimal import Decimal
