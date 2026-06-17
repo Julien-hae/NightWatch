@@ -43,6 +43,9 @@ class AsyncPositionRepo(Protocol):
     async def get(self, symbol: str) -> Decimal:
         """Return current quantity for *symbol* or zero if absent."""
 
+    async def get_all(self) -> dict[str, Decimal]:
+        """Return all positions as a mapping of symbol to quantity."""
+
     async def upsert(self, symbol: str, qty: Decimal) -> None:
         """Insert or replace the quantity for *symbol*."""
 
@@ -204,6 +207,16 @@ class PgPositionRepo:
         if row is None:
             return Decimal("0")
         return Decimal(str(row["qty"]))
+
+    async def get_all(self) -> dict[str, Decimal]:
+        """Return all positions as a mapping of symbol to quantity.
+
+        Returns:
+            Dict of symbol → quantity for every row in the positions table.
+        """
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch("SELECT symbol, qty FROM positions")
+        return {row["symbol"]: Decimal(str(row["qty"])) for row in rows}
 
     async def upsert(self, symbol: str, qty: Decimal) -> None:
         """Insert or replace position quantity for *symbol*.
