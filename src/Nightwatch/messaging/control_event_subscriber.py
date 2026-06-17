@@ -60,6 +60,8 @@ class ControlEventSubscriber(NatsConnector):
 
         Args:
             cb: Callback invoked with each successfully parsed BotControlEvent.
+                The callback must complete any durable state changes before it
+                returns because ACK is sent only after ``cb`` succeeds.
             durable: Name of the durable consumer (persists across restarts).
             ack_wait: Seconds JetStream waits before redelivering an unacked message.
             deliver_policy: JetStream delivery policy for the durable consumer.
