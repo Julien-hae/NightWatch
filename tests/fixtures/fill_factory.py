@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 
-from Nightwatch.models.fill import Fill  # type: ignore[import-untyped]
-from Nightwatch.models.signal import Side  # type: ignore[import-untyped]
+from Nightwatch.models.fill import Fill
+from Nightwatch.models.signal import Side
 
 
 def make_fill(
