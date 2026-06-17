@@ -19,12 +19,18 @@ LOGGER = logging.getLogger(__name__)
 class AsyncPositionRepo(Protocol):
     """Async persistence port for positions."""
 
+    async def get_all(self) -> dict[str, Decimal]:
+        """Return all positions as a mapping of symbol to quantity."""
+
     async def upsert(self, symbol: str, qty: Decimal) -> None:
         """Insert or replace the quantity for *symbol*."""
 
 
 class AsyncPortfolioStateRepo(Protocol):
     """Async persistence port for portfolio state (cash balance)."""
+
+    async def get_cash(self) -> Decimal:
+        """Return current cash balance, or zero if not found."""
 
     async def save_cash(self, cash: Decimal) -> None:
         """Persist or update cash balance."""
@@ -175,6 +181,30 @@ class PaperTrader:
             if last_price is not None:
                 self._metrics.equity_per_symbol.labels(symbol=symbol).set(float(qty * last_price))
         self._metrics.equity.set(float(self._portfolio.equity()))
+
+    async def rehydrate(self) -> None:
+        """Load persisted cash and positions from the database and restore portfolio state.
+
+        Should be called once at startup to resume from the last known state.
+        Has no effect when either repository is absent.
+        """
+        if self._portfolio_state_repo is not None:
+            self._portfolio.cash = await self._portfolio_state_repo.get_cash()
+
+        if self._position_repo is not None:
+            positions = await self._position_repo.get_all()
+            self._portfolio.positions = positions
+
+        LOGGER.info(
+            json.dumps(
+                {
+                    "event": "rehydrate",
+                    "cash": float(self._portfolio.cash),
+                    "positions": {s: float(q) for s, q in self._portfolio.positions.items()},
+                },
+                default=str,
+            )
+        )
 
     async def persist_fill_state(self, fill: Fill) -> None:
         """Persist position, cash, and equity snapshot after a fill.

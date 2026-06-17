@@ -190,3 +190,45 @@ class TestPaperTraderWithDatabase(unittest.TestCase):
         persisted_cash = self.run_async(portfolio_state_repo.get_cash())
         self.assertLess(float(persisted_cash), 5000.0)
         self.assertEqual(float(persisted_cash), float(portfolio.cash))
+
+    def test_rehydrate_restores_cash_and_positions_after_restart(self) -> None:
+        """Simulate a restart: trade, persist, then rehydrate a fresh PaperTrader and assert state matches."""
+        initial_cash = Decimal("3000")
+        price = Decimal("50000")
+        notional = Decimal("100")
+        fee_rate = Decimal("0.001")
+
+        position_repo = PgPositionRepo(self.pool)
+        portfolio_state_repo = PgPortfolioStateRepo(self.pool)
+
+        # ── First "run": trade and persist ──────────────────────────────────
+        portfolio = make_portfolio(cash=initial_cash, last_prices={"BTC/USD": price})
+        trader = PaperTrader(
+            portfolio=portfolio,
+            order_factory_config=OrderFactoryConfig(order_notional=notional),
+            fee_model=PercentageFeeModel(rate=fee_rate),
+            position_repo=position_repo,
+            portfolio_state_repo=portfolio_state_repo,
+        )
+        signal = make_signal(symbol="BTC/USD", side=Side.BUY)
+        fill = trader.process_signal(signal)
+        self.assertIsNotNone(fill)
+        assert fill is not None
+        self.run_async(trader.persist_fill_state(fill))
+
+        expected_cash = portfolio.cash
+        expected_qty = portfolio.position_qty("BTC/USD")
+
+        # ── "Restart": fresh portfolio, then rehydrate ───────────────────────
+        fresh_portfolio = make_portfolio(cash=Decimal("0"))
+        rehydrated_trader = PaperTrader(
+            portfolio=fresh_portfolio,
+            order_factory_config=OrderFactoryConfig(order_notional=notional),
+            fee_model=PercentageFeeModel(rate=fee_rate),
+            position_repo=position_repo,
+            portfolio_state_repo=portfolio_state_repo,
+        )
+        self.run_async(rehydrated_trader.rehydrate())
+
+        self.assertEqual(rehydrated_trader.portfolio.cash, expected_cash)
+        self.assertEqual(rehydrated_trader.portfolio.position_qty("BTC/USD"), expected_qty)
