@@ -298,3 +298,96 @@ class PgPortfolioStateRepo:
         async with self._pool.acquire() as conn:
             await conn.execute("DELETE FROM portfolio_state")
             await conn.execute(sql, cash)
+
+
+class PgAtomicTradeWriter:
+    """Write order/fill/portfolio state in a single DB transaction.
+
+    The order insert is idempotent on ``idempotency_key = signal_id``.
+    When the order already exists, no additional writes are performed.
+    """
+
+    def __init__(self, pool: asyncpg.Pool) -> None:
+        """Initialise with an asyncpg connection pool."""
+        self._pool = pool
+
+    async def write_trade(
+        self,
+        order: Order,
+        fill: Fill,
+        *,
+        position_qty: Decimal,
+        cash: Decimal,
+        equity: Decimal,
+    ) -> OrderCreateResult:
+        """Persist one trade atomically and idempotently.
+
+        Args:
+            order: Order to insert with signal-id idempotency.
+            fill: Fill linked to the order.
+            position_qty: Updated position qty for ``fill.symbol``.
+            cash: Updated portfolio cash balance.
+            equity: Updated total portfolio equity.
+
+        Returns:
+            ``CREATED`` when all rows were committed once.
+            ``ALREADY_EXISTS`` when the order idempotency key already exists.
+        """
+        insert_order_sql = """
+            INSERT INTO orders (order_id, idempotency_key, signal_id, symbol, side, qty, status, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT (idempotency_key) DO NOTHING
+        """
+        insert_fill_sql = """
+            INSERT INTO fills (fill_id, order_id, symbol, side, qty, price, fee, ts)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        """
+        upsert_position_sql = """
+            INSERT INTO positions (symbol, qty, updated_at)
+            VALUES ($1, $2, NOW())
+            ON CONFLICT (symbol) DO UPDATE
+                SET qty = EXCLUDED.qty,
+                    updated_at = EXCLUDED.updated_at
+        """
+        upsert_cash_sql = """
+            INSERT INTO portfolio_state (cash, updated_at)
+            VALUES ($1, NOW())
+            ON CONFLICT (cash) DO UPDATE
+                SET updated_at = NOW()
+        """
+        insert_equity_sql = "INSERT INTO equity_snapshots (equity, cash, ts) VALUES ($1, $2, NOW())"
+
+        async with self._pool.acquire() as conn:
+            async with conn.transaction():
+                status = await conn.execute(
+                    insert_order_sql,
+                    order.order_id,
+                    order.signal_id,
+                    order.signal_id,
+                    order.symbol,
+                    order.side.value,
+                    order.qty,
+                    order.status.value,
+                    order.created_at,
+                )
+                inserted = int(status.split()[-1])
+                if inserted == 0:
+                    return OrderCreateResult.ALREADY_EXISTS
+
+                await conn.execute(
+                    insert_fill_sql,
+                    fill.fill_id,
+                    fill.order_id,
+                    fill.symbol,
+                    fill.side.value,
+                    fill.qty,
+                    fill.price,
+                    fill.fee,
+                    fill.ts,
+                )
+                await conn.execute(upsert_position_sql, fill.symbol, position_qty)
+                await conn.execute("DELETE FROM portfolio_state")
+                await conn.execute(upsert_cash_sql, cash)
+                await conn.execute(insert_equity_sql, equity, cash)
+
+        return OrderCreateResult.CREATED
