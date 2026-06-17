@@ -9,3 +9,4 @@ class ServiceHealth:
 
     ws_connected: bool = False
     nats_connected: bool = False
+    db_connected: bool = False
