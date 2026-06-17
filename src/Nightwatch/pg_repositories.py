@@ -47,6 +47,16 @@ class AsyncPositionRepo(Protocol):
         """Insert or replace the quantity for *symbol*."""
 
 
+class AsyncPortfolioStateRepo(Protocol):
+    """Async persistence port for portfolio state (cash balance)."""
+
+    async def get_cash(self) -> Decimal:
+        """Return current cash balance, or zero if not found."""
+
+    async def save_cash(self, cash: Decimal) -> None:
+        """Persist or update cash balance."""
+
+
 class PgSignalRepo:
     """Postgres signal repository with upsert semantics."""
 
@@ -234,3 +244,44 @@ class PgEquitySnapshotRepo:
         sql = "INSERT INTO equity_snapshots (equity, cash, ts) VALUES ($1, $2, NOW())"
         async with self._pool.acquire() as conn:
             await conn.execute(sql, equity, cash)
+
+
+class PgPortfolioStateRepo:
+    """Postgres repository for portfolio state (cash balance) with single-row semantics."""
+
+    def __init__(self, pool: asyncpg.Pool) -> None:
+        """Initialise with an asyncpg connection pool.
+
+        Args:
+            pool: Shared asyncpg connection pool.
+        """
+        self._pool = pool
+
+    async def get_cash(self) -> Decimal:
+        """Return current cash balance, or zero if not found.
+
+        Returns:
+            Current cash balance, or ``Decimal("0")`` when portfolio_state is empty.
+        """
+        sql = "SELECT cash FROM portfolio_state LIMIT 1"
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(sql)
+        if row is None:
+            return Decimal("0")
+        return Decimal(str(row["cash"]))
+
+    async def save_cash(self, cash: Decimal) -> None:
+        """Persist or update cash balance (single row).
+
+        Args:
+            cash: Cash balance to persist.
+        """
+        sql = """
+            INSERT INTO portfolio_state (cash, updated_at)
+            VALUES ($1, NOW())
+            ON CONFLICT (cash) DO UPDATE
+                SET updated_at = NOW()
+        """
+        async with self._pool.acquire() as conn:
+            await conn.execute("DELETE FROM portfolio_state")
+            await conn.execute(sql, cash)

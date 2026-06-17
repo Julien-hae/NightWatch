@@ -3,6 +3,7 @@
 import json
 import logging
 from decimal import Decimal
+from typing import Protocol
 
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.fill import Fill
@@ -13,6 +14,27 @@ from Nightwatch.models.portfolio import Portfolio
 from Nightwatch.models.signal import Signal
 
 LOGGER = logging.getLogger(__name__)
+
+
+class AsyncPositionRepo(Protocol):
+    """Async persistence port for positions."""
+
+    async def upsert(self, symbol: str, qty: Decimal) -> None:
+        """Insert or replace the quantity for *symbol*."""
+
+
+class AsyncPortfolioStateRepo(Protocol):
+    """Async persistence port for portfolio state (cash balance)."""
+
+    async def save_cash(self, cash: Decimal) -> None:
+        """Persist or update cash balance."""
+
+
+class AsyncEquitySnapshotRepo(Protocol):
+    """Async persistence port for equity snapshots."""
+
+    async def insert(self, equity: Decimal, cash: Decimal) -> None:
+        """Append an equity snapshot row."""
 
 
 class PaperTrader:
@@ -31,6 +53,9 @@ class PaperTrader:
         fee_model: PercentageFeeModel,
         metrics: NightwatchMetrics | None = None,
         deduplicator: SignalDeduplicator | None = None,
+        position_repo: AsyncPositionRepo | None = None,
+        portfolio_state_repo: AsyncPortfolioStateRepo | None = None,
+        equity_snapshot_repo: AsyncEquitySnapshotRepo | None = None,
     ) -> None:
         """Initialise the paper trader.
 
@@ -41,11 +66,17 @@ class PaperTrader:
             metrics: Optional metrics instance for orders/fills/equity counters.
             deduplicator: Optional deduplicator. When omitted, a fresh one is
                 created and wired to the duplicates counter from ``metrics``.
+            position_repo: Optional async position repository for persisting position state.
+            portfolio_state_repo: Optional async portfolio state repo for persisting cash.
+            equity_snapshot_repo: Optional async equity snapshot repo for persisting snapshots.
         """
         self._portfolio = portfolio
         self._order_factory_config = order_factory_config
         self._fee_model = fee_model
         self._metrics = metrics
+        self._position_repo = position_repo
+        self._portfolio_state_repo = portfolio_state_repo
+        self._equity_snapshot_repo = equity_snapshot_repo
         if deduplicator is None:
             duplicates_counter = metrics.signals_duplicates_total if metrics is not None else None
             deduplicator = SignalDeduplicator(duplicates_counter=duplicates_counter)
@@ -144,3 +175,20 @@ class PaperTrader:
             if last_price is not None:
                 self._metrics.equity_per_symbol.labels(symbol=symbol).set(float(qty * last_price))
         self._metrics.equity.set(float(self._portfolio.equity()))
+
+    async def persist_fill_state(self, fill: Fill) -> None:
+        """Persist position, cash, and equity snapshot after a fill.
+
+        Args:
+            fill: The fill that was just applied to the portfolio.
+        """
+        if self._position_repo is not None:
+            qty = self._portfolio.position_qty(fill.symbol)
+            await self._position_repo.upsert(fill.symbol, qty)
+
+        if self._portfolio_state_repo is not None:
+            await self._portfolio_state_repo.save_cash(self._portfolio.cash)
+
+        if self._equity_snapshot_repo is not None:
+            equity = self._portfolio.equity()
+            await self._equity_snapshot_repo.insert(equity, self._portfolio.cash)
