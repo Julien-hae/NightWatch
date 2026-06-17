@@ -1,71 +1,119 @@
 """Unit tests for the /healthz and /metrics endpoints."""
 
+import os
 import unittest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from Nightwatch.api import create_app
+from Nightwatch.database import DatabaseConnector
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.service_health import ServiceHealth
+
+
+class _StubDatabase(DatabaseConnector):
+    """DatabaseConnector test double returning a fixed ping result."""
+
+    def __init__(self, result: bool) -> None:
+        super().__init__(database_url="postgresql://stub/stub")
+        self._result = result
+        self.calls = 0
+
+    async def ping(self) -> bool:
+        self.calls += 1
+        return self._result
 
 
 class TestHealthEndpoint(unittest.TestCase):
     """Tests for the /healthz endpoint to ensure it returns the correct health status."""
 
     def setUp(self) -> None:
-        """Set up any necessary state before each test."""
-        self.health = ServiceHealth(ws_connected=False, nats_connected=False)
+        self._env_patcher = patch.dict(os.environ, {"NATS_SERVERS": ""})
+        self._env_patcher.start()
+        self.health = ServiceHealth(ws_connected=False, nats_connected=False, db_connected=False)
         self.client = TestClient(create_app(health=self.health))
 
+    def tearDown(self) -> None:
+        self.client.close()
+        self._env_patcher.stop()
+
     def test_healthz_returns_503_when_unhealthy(self) -> None:
-        """The /healthz endpoint should return a 503 Service Unavailable status when unhealthy."""
         response = self.client.get("/healthz")
 
         self.assertEqual(response.status_code, 503)
         self.assertEqual(
             response.json(),
-            {"ws_connected": False, "nats_connected": False},
+            {"ok": False, "ws_connected": False, "nats_connected": False, "db_connected": False},
         )
 
-    def test_healthz_reflects_connected_state(self) -> None:
-        """When the health state is updated to connected, /healthz should reflect that."""
+    def test_healthz_returns_200_when_all_connected(self) -> None:
         self.health.ws_connected = True
         self.health.nats_connected = True
+        self.health.db_connected = True
         response = self.client.get("/healthz")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            {"ws_connected": True, "nats_connected": True},
+            {"ok": True, "ws_connected": True, "nats_connected": True, "db_connected": True},
         )
 
-    def test_healthz_partial_connected_state_to_websockets(self) -> None:
-        """When the health state is partially connected, /healthz should reflect that."""
+    def test_healthz_503_when_only_db_disconnected(self) -> None:
+        self.health.ws_connected = True
+        self.health.nats_connected = True
+        self.health.db_connected = False
+        response = self.client.get("/healthz")
+
+        self.assertEqual(response.status_code, 503)
+        body = response.json()
+        self.assertFalse(body["ok"])
+        self.assertFalse(body["db_connected"])
+
+    def test_healthz_503_when_only_nats_disconnected(self) -> None:
         self.health.ws_connected = True
         self.health.nats_connected = False
+        self.health.db_connected = True
         response = self.client.get("/healthz")
 
         self.assertEqual(response.status_code, 503)
-        self.assertEqual(
-            response.json(),
-            {"ws_connected": True, "nats_connected": False},
-        )
+        body = response.json()
+        self.assertFalse(body["ok"])
+        self.assertFalse(body["nats_connected"])
 
-    def test_healthz_partial_connected_state_to_nats(self) -> None:
-        """When the health state is partially connected, /healthz should reflect that."""
-        self.health.ws_connected = False
-        self.health.nats_connected = True
-        response = self.client.get("/healthz")
+
+@patch.dict(os.environ, {"NATS_SERVERS": ""})
+class TestHealthEndpointWithDatabase(unittest.TestCase):
+    """Tests for the /healthz endpoint when a DatabaseConnector is injected."""
+
+    def test_db_connected_true_when_ping_succeeds(self) -> None:
+        health = ServiceHealth(ws_connected=True, nats_connected=True, db_connected=False)
+        db = _StubDatabase(result=True)
+        client = TestClient(create_app(health=health, database=db))
+        try:
+            response = client.get("/healthz")
+        finally:
+            client.close()
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["ok"])
+        self.assertTrue(body["db_connected"])
+        self.assertEqual(db.calls, 1)
+
+    def test_db_connected_false_when_ping_fails(self) -> None:
+        health = ServiceHealth(ws_connected=True, nats_connected=True, db_connected=True)
+        db = _StubDatabase(result=False)
+        client = TestClient(create_app(health=health, database=db))
+        try:
+            response = client.get("/healthz")
+        finally:
+            client.close()
 
         self.assertEqual(response.status_code, 503)
-        self.assertEqual(
-            response.json(),
-            {"ws_connected": False, "nats_connected": True},
-        )
-
-    def tearDown(self) -> None:
-        """Reset any global state if necessary after each test."""
-        self.client.close()
+        body = response.json()
+        self.assertFalse(body["ok"])
+        self.assertFalse(body["db_connected"])
 
 
 class TestMetricsEndpoint(unittest.TestCase):
@@ -75,14 +123,15 @@ class TestMetricsEndpoint(unittest.TestCase):
         self.metrics = NightwatchMetrics()
         self.client = TestClient(create_app(metrics=self.metrics))
 
+    def tearDown(self) -> None:
+        self.client.close()
+
     def test_metrics_returns_200(self) -> None:
-        """The /metrics endpoint should return a 200 OK status."""
         response = self.client.get("/metrics")
 
         self.assertEqual(response.status_code, 200)
 
     def test_metrics_contains_expected_counters(self) -> None:
-        """The /metrics response should include the expected metric names."""
         response = self.client.get("/metrics")
 
         body = response.text
@@ -93,7 +142,6 @@ class TestMetricsEndpoint(unittest.TestCase):
         self.assertIn("ticks_published_total", body)
 
     def test_metrics_reflects_incremented_counters(self) -> None:
-        """After incrementing counters, the /metrics response should reflect the new values."""
         self.metrics.ticks_received_total.inc(5)
         self.metrics.parse_errors_total.inc(2)
         self.metrics.ws_reconnects_total.inc(1)
@@ -107,7 +155,6 @@ class TestMetricsEndpoint(unittest.TestCase):
         self.assertIn("ticks_published_total", body)
 
     def test_metrics_reflects_incremented_labeled_counters(self) -> None:
-        """After incrementing labeled counters, the /metrics response should reflect the new values per symbol."""
         self.metrics.ticks_consumed_total.labels(symbol="BTC/USD").inc(3)
         self.metrics.ticks_consumed_total.labels(symbol="ETH/USD").inc(7)
         self.metrics.ticks_published_total.labels(symbol="BTC/USD").inc(4)
@@ -119,7 +166,3 @@ class TestMetricsEndpoint(unittest.TestCase):
         self.assertIn('ticks_consumed_total{symbol="ETH/USD"} 7.0', body)
         self.assertIn('ticks_published_total{symbol="BTC/USD"} 4.0', body)
         self.assertIn('ticks_published_total{symbol="ETH/USD"} 2.0', body)
-
-    def tearDown(self) -> None:
-        """Reset any global state if necessary after each test."""
-        self.client.close()

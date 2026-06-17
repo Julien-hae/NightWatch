@@ -99,3 +99,42 @@ The following environment variables may be used to configure  `Nightwatch`:
 | Environment Variable | Purpose | Default Value | Allowed Values |
 |----------------------|-|-|-|
 | LOG_LEVEL            | Sets the default log level [here](src/Nightwatch/common/logging_configuration.py). | "INFO" | See [Python Standard Library API-Reference](https://docs.python.org/3/library/logging.html#logging-levels) |
+| NATS_SERVERS         | Comma-separated NATS URLs. | `nats://127.0.0.1:4222` | Any reachable NATS URL list |
+| NATS_TOKEN           | NATS authentication token. | `""` | Free-form |
+| DATABASE_URL         | Postgres DSN used by the `trade-service` for the `/healthz` DB check. Accepts both the bare `postgresql://` form and the SQLAlchemy-style `postgresql+asyncpg://` form. | unset | e.g. `postgresql+asyncpg://trade:tradepass@trade-db:5432/trade` |
+| RUN_INTEGRATION      | Gate integration tests (`test_integration_*.py`). | unset | `1` to enable |
+
+## Running with Docker Compose
+
+A `docker-compose.yml` is provided to run the `trade-service` together
+with its dependencies (Postgres and NATS) locally or on a VPS:
+
+| Service | Image | Purpose |
+|---------|-------|---------|
+| `trade-db` | `postgres:16-alpine` | Persistent Postgres instance (DB `trade`, user `trade`, password `tradepass`). |
+| `nats` | `nats:2.10-alpine` | NATS broker with JetStream enabled. |
+| `trade-service` | built from local `Dockerfile` | FastAPI app exposing `/healthz` and `/metrics` on port `8000`. |
+
+Spin everything up:
+
+```bash
+docker compose up --build
+```
+
+Then verify the service can reach Postgres and NATS:
+
+```bash
+curl -s http://localhost:8000/healthz | jq
+# {
+#   "ok": true,
+#   "ws_connected": false,
+#   "nats_connected": true,
+#   "db_connected": true
+# }
+```
+
+The `/healthz` endpoint performs a live `SELECT 1` against the database
+on every request when a `DatabaseConnector` is injected, so
+`db_connected` reflects the **current** reachability of `trade-db`. The
+endpoint returns `200` when every connection is healthy and `503`
+otherwise.
