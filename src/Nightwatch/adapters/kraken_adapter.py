@@ -11,7 +11,7 @@ from websockets import connect
 from websockets.asyncio.client import ClientConnection
 from websockets.exceptions import WebSocketException
 
-from Nightwatch.exchange_market_adapter import ExchangeMarketAdapter
+from Nightwatch.adapters.exchange_market_adapter import ExchangeMarketAdapter
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
 
@@ -105,7 +105,7 @@ class KrakenAdapter(ExchangeMarketAdapter):
                 parsed = self.parse_message(json.loads(raw))
                 if parsed is not None:
                     if self._metrics is not None:
-                        self._metrics.ticks_received_total.inc()
+                        self._metrics.ticks_received_total.labels(symbol=parsed.symbol).inc()
                     yield parsed
             except json.JSONDecodeError as exc:
                 if self._metrics is not None:

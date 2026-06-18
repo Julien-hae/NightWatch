@@ -8,7 +8,7 @@ from typing import Any
 
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.signal import Signal
-from Nightwatch.strategy_runner import StrategyRunner
+from Nightwatch.pipeline.strategy_runner import StrategyRunner
 
 
 def make_tick(

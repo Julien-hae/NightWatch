@@ -5,7 +5,7 @@ import unittest
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.risk_decision import RiskDecision
 from Nightwatch.models.signal import Signal
-from Nightwatch.risk_engine import RiskEngine
+from Nightwatch.pipeline.risk_engine import RiskEngine
 from Nightwatch.rules.cooldown_rule import CooldownRule
 from Nightwatch.rules.min_trade_strength_rule import MinTradeStrengthRule
 from Nightwatch.rules.risk_rule import RiskRule
@@ -91,7 +91,12 @@ class TestRiskEngine(unittest.TestCase):
         risk_decision = risk_engine.evaluate(self.signal)
         self.assertFalse(risk_decision.allowed)
         self.assertEqual(
-            self.metrics.get_counter_value(self.metrics.signals_rejected_total, symbol=self.signal.symbol, rule="CooldownRule"), 1
+            self.metrics.get_counter_value(
+                self.metrics.signals_rejected_total,
+                symbol=self.signal.symbol,
+                reason="Cooldown active",
+            ),
+            1,
         )
 
     def test_create_default_rule_order(self) -> None:

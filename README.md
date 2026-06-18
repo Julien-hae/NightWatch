@@ -72,6 +72,39 @@ Do not forget to activate your virtualenv when done with the makefile
 
 ## Usage
 
+## Metrics Contract
+
+The metrics below are a compatibility contract for dashboards and alerts.
+Metric names and label keys are considered stable and MUST NOT change without
+an explicit migration plan.
+
+### market-service MUST expose
+
+- `ticks_received_total{symbol}` (counter): total ticks received from the exchange per symbol
+- `ticks_published_total{symbol}` (counter): total ticks published to NATS per symbol
+- `ws_reconnects_total` (counter): total websocket reconnect attempts
+- `parse_errors_total` (counter): total ticker message parse failures
+
+### trade-service MUST expose
+
+- `signals_total{symbol,side,strategy}` (counter): total strategy-emitted signals
+- `signals_rejected_total{symbol,reason}` (counter): total signals rejected by risk checks
+- `orders_created_total{symbol,side}` (counter): total orders created from approved signals
+- `orders_filled_total{symbol,side}` (counter): total paper-executed fills
+- `position_qty{symbol}` (gauge): current open position quantity per symbol
+- `cash_balance` (gauge): current quote-currency cash balance
+- `equity` (gauge): current total equity (cash + position value)
+- `fees_paid_total` (counter): cumulative fees paid by the paper portfolio
+
+Example:
+
+```text
+trade-service MUST expose:
+- equity (gauge): current total equity in quote currency
+- position_qty{symbol} (gauge): current position quantity
+- orders_filled_total{symbol,side} (counter): number of filled paper orders
+```
+
 ## Contents and Concepts
 
 At first glance one may be overwhelmed by the amount of files and folders present in this directory. This is mainly due to the fact, that each tool uses its own configuration file. The situation has improved with more and more tools adding support for pyproject.toml. The following two tables describe the main structure of the project:

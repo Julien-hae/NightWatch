@@ -18,11 +18,11 @@ from nats.aio.client import Client as NatsClient
 from nats.js.api import AckPolicy, ConsumerConfig, DeliverPolicy, RetentionPolicy, StorageType, StreamConfig
 from sqlalchemy import create_engine, text
 
+from Nightwatch.db.pg_repositories import PgAtomicTradeWriter
+from Nightwatch.db.repositories import OrderCreateResult
 from Nightwatch.models.fill import Fill
 from Nightwatch.models.order import Order, Status
 from Nightwatch.models.signal import Side
-from Nightwatch.pg_repositories import PgAtomicTradeWriter
-from Nightwatch.repositories import OrderCreateResult
 from tests.fixtures.db import RESET_DB_SQL, alembic_cfg, to_pg_dsn
 from tests.fixtures.nats_server import NatsServerFixture
 

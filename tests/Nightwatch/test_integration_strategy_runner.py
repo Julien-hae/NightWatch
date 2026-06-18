@@ -10,17 +10,17 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
-from Nightwatch.kraken_adapter import KrakenAdapter
+from Nightwatch.adapters.kraken_adapter import KrakenAdapter
 from Nightwatch.messaging.publisher import MarketTickPublisher
 from Nightwatch.messaging.subscriber import MarketTickSubscriber
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.nats_config import NatsConnectionConfig
 from Nightwatch.models.tick_buffer import TickBuffer
-from Nightwatch.risk_engine import RiskEngine
+from Nightwatch.pipeline.risk_engine import RiskEngine
+from Nightwatch.pipeline.strategy_runner import StrategyRunner
 from Nightwatch.rules.min_trade_strength_rule import MinTradeStrengthRule
 from Nightwatch.strategies.momentum_burst import MomentumBurstStrategy
-from Nightwatch.strategy_runner import StrategyRunner
 from tests.fixtures.nats_server import NatsServerFixture
 from tests.fixtures.tick_factory import make_tick_sequence
 

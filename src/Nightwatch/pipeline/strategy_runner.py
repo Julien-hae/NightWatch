@@ -3,14 +3,14 @@
 import json
 import logging
 
-from Nightwatch.kill_switch import KillSwitch
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.signal import Signal
 from Nightwatch.models.strategy_decision import StrategyDecision
 from Nightwatch.models.tick_buffer import TickBuffer
-from Nightwatch.paper_trader import PaperTrader
-from Nightwatch.risk_engine import RiskEngine
+from Nightwatch.pipeline.kill_switch import KillSwitch
+from Nightwatch.pipeline.paper_trader import PaperTrader
+from Nightwatch.pipeline.risk_engine import RiskEngine
 from Nightwatch.strategies.strategy import Strategy
 
 LOGGER = logging.getLogger(__name__)

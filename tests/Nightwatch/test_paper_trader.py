@@ -14,11 +14,11 @@ from Nightwatch.models.paper_execution import PercentageFeeModel
 from Nightwatch.models.portfolio import Portfolio
 from Nightwatch.models.signal import Side
 from Nightwatch.models.tick_buffer import TickBuffer
-from Nightwatch.paper_trader import PaperTrader
-from Nightwatch.risk_engine import RiskEngine
+from Nightwatch.pipeline.paper_trader import PaperTrader
+from Nightwatch.pipeline.risk_engine import RiskEngine
+from Nightwatch.pipeline.strategy_runner import StrategyRunner
 from Nightwatch.rules.max_signal_per_minute_rule import MaxSignalPerMinuteRule
 from Nightwatch.strategies.momentum_burst import MomentumBurstStrategy
-from Nightwatch.strategy_runner import StrategyRunner
 from tests.fixtures.portfolio_factory import make_portfolio
 from tests.fixtures.signal_factory import make_signal
 from tests.fixtures.tick_factory import feed_ticks, make_tick_sequence
@@ -35,7 +35,7 @@ def _build_paper_trader(portfolio: Portfolio, metrics: NightwatchMetrics | None 
 
 def _extract_json_event(records: list[str], event_name: str) -> dict[str, str]:
     for record in records:
-        _, _, payload = record.partition("INFO:Nightwatch.paper_trader:")
+        _, _, payload = record.partition("INFO:Nightwatch.pipeline.paper_trader:")
         if not payload:
             continue
         try:
@@ -94,7 +94,7 @@ class TestPaperTraderProcessSignal(unittest.TestCase):
             1.0,
         )
         self.assertAlmostEqual(
-            metrics.get_counter_value(metrics.fees_paid_total, symbol="BTC/USD") or 0.0,
+            metrics.get_counter_value(metrics.fees_paid_total) or 0.0,
             float(fill.fee),
         )
         self.assertAlmostEqual(metrics.cash_balance._value.get(), float(portfolio.cash))
@@ -124,7 +124,7 @@ class TestPaperTraderProcessSignal(unittest.TestCase):
         trader = _build_paper_trader(portfolio)
         signal = make_signal(symbol="BTC/USD", side=Side.BUY)
 
-        with self.assertLogs("Nightwatch.paper_trader", level="INFO") as log:
+        with self.assertLogs("Nightwatch.pipeline.paper_trader", level="INFO") as log:
             fill = trader.process_signal(signal)
         assert fill is not None
 
@@ -178,7 +178,7 @@ class TestStrategyRunnerPaperTradingPipeline(unittest.TestCase):
             symbol="BTC/USD",
         )
 
-        with self.assertLogs("Nightwatch.paper_trader", level="INFO") as log:
+        with self.assertLogs("Nightwatch.pipeline.paper_trader", level="INFO") as log:
             signal = feed_ticks(runner, ticks)
 
         self.assertIsNotNone(signal)
@@ -216,7 +216,7 @@ class TestMetricsEndpointAfterPaperTrade(unittest.TestCase):
         body = response.text
         self.assertIn('orders_created_total{side="BUY",symbol="BTC/USD"} 1.0', body)
         self.assertIn('orders_filled_total{side="BUY",symbol="BTC/USD"} 1.0', body)
-        self.assertIn('fees_paid_total{symbol="BTC/USD"}', body)
+        self.assertRegex(body, r"(?m)^fees_paid_total\s+")
         self.assertIn('position_qty{symbol="BTC/USD"}', body)
         self.assertIn("cash_balance", body)
         self.assertIn("equity", body)

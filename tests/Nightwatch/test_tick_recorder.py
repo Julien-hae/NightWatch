@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from decimal import Decimal
 
-from Nightwatch.tick_recorder import MarketTickRecorder
+from Nightwatch.adapters.tick_recorder import MarketTickRecorder
 from tests.fixtures.tick_factory import make_tick
 
 

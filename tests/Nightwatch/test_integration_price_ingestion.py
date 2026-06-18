@@ -14,7 +14,7 @@ from typing import Any
 
 from nats.aio.client import Client as NatsClient
 
-from Nightwatch.kraken_adapter import KrakenAdapter
+from Nightwatch.adapters.kraken_adapter import KrakenAdapter
 from Nightwatch.messaging.publisher import MarketTickPublisher
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.nats_config import NatsConnectionConfig

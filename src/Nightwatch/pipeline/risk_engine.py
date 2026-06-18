@@ -63,7 +63,8 @@ class RiskEngine:
             decision = rule.evaluate(signal)
             if decision is not None:
                 if self._metrics is not None:
-                    self._metrics.signals_rejected_total.labels(symbol=signal.symbol, rule=rule.name).inc()
+                    reason = decision.reason or rule.name
+                    self._metrics.signals_rejected_total.labels(symbol=signal.symbol, reason=reason).inc()
                 return decision
 
         if self._metrics is not None:

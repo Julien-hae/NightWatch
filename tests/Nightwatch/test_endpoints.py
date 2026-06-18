@@ -7,7 +7,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from Nightwatch.api import create_app
-from Nightwatch.database import DatabaseConnector
+from Nightwatch.db.database import DatabaseConnector
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.service_health import ServiceHealth
 
@@ -142,13 +142,13 @@ class TestMetricsEndpoint(unittest.TestCase):
         self.assertIn("ticks_published_total", body)
 
     def test_metrics_reflects_incremented_counters(self) -> None:
-        self.metrics.ticks_received_total.inc(5)
+        self.metrics.ticks_received_total.labels(symbol="BTC/USD").inc(5)
         self.metrics.parse_errors_total.inc(2)
         self.metrics.ws_reconnects_total.inc(1)
         response = self.client.get("/metrics")
 
         body = response.text
-        self.assertIn("ticks_received_total 5.0", body)
+        self.assertIn('ticks_received_total{symbol="BTC/USD"} 5.0', body)
         self.assertIn("parse_errors_total 2.0", body)
         self.assertIn("ws_reconnects_total 1.0", body)
         self.assertIn("ticks_consumed_total", body)

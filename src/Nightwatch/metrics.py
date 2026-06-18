@@ -46,6 +46,7 @@ class NightwatchMetrics:
         self.ticks_received_total = Counter(
             "ticks_received_total",
             "Total number of ticks received from the exchange",
+            labelnames=["symbol"],
             registry=self.registry,
         )
         self.ticks_consumed_total = Counter(
@@ -90,8 +91,8 @@ class NightwatchMetrics:
         )
         self.signals_rejected_total = Counter(
             "signals_rejected_total",
-            "Total number of signals rejected by the risk engine for a given rule",
-            labelnames=["symbol", "rule"],
+            "Total number of signals rejected by the risk engine for a given reason",
+            labelnames=["symbol", "reason"],
             registry=self.registry,
         )
         self.strategy_evaluations_total = Counter(
@@ -145,8 +146,7 @@ class NightwatchMetrics:
         )
         self.fees_paid_total = Counter(
             "fees_paid_total",
-            "Cumulative fees paid by the paper trading portfolio",
-            labelnames=["symbol"],
+            "Cumulative fees paid by the paper trading portfolio across all symbols",
             registry=self.registry,
         )
         self.cash_balance = Gauge(
