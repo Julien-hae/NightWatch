@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from Nightwatch.api import create_app
 from Nightwatch.db.database import DatabaseConnector
-from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.metrics.metrics import NightwatchMetrics
 from Nightwatch.models.service_health import ServiceHealth
 
 

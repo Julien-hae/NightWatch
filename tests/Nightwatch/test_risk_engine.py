@@ -2,7 +2,7 @@
 
 import unittest
 
-from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.metrics.metrics import NightwatchMetrics
 from Nightwatch.models.risk_decision import RiskDecision
 from Nightwatch.models.signal import Signal
 from Nightwatch.pipeline.risk_engine import RiskEngine

@@ -8,7 +8,7 @@ from decimal import Decimal
 from fastapi.testclient import TestClient
 
 from Nightwatch.api import create_app
-from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.metrics.metrics import NightwatchMetrics
 from Nightwatch.models.order_factory import OrderFactoryConfig
 from Nightwatch.models.paper_execution import PercentageFeeModel
 from Nightwatch.models.portfolio import Portfolio

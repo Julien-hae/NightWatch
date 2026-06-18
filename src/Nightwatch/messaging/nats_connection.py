@@ -5,7 +5,7 @@ from typing import Any, Awaitable, Callable
 
 from nats.aio.client import Client as NatsClient
 
-from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.metrics.metrics import NightwatchMetrics
 from Nightwatch.models.nats_config import NatsConnectionConfig
 
 LOGGER = logging.getLogger(__name__)

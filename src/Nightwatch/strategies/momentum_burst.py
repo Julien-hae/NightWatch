@@ -6,7 +6,7 @@ from collections import deque
 from datetime import timedelta
 from decimal import Decimal
 
-from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.metrics.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.signal import Side
 from Nightwatch.models.strategy_decision import StrategyDecision

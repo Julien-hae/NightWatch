@@ -12,7 +12,7 @@ from websockets.asyncio.client import ClientConnection
 from websockets.exceptions import WebSocketException
 
 from Nightwatch.adapters.exchange_market_adapter import ExchangeMarketAdapter
-from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.metrics.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
 
 LOGGER = logging.getLogger(__name__)

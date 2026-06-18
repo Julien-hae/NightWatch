@@ -5,7 +5,7 @@ from collections import deque
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.metrics.metrics import NightwatchMetrics
 from Nightwatch.strategies.momentum_burst import MomentumBurstStrategy
 from tests.fixtures.tick_factory import make_tick_sequence
 

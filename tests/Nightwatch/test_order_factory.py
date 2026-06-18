@@ -3,7 +3,7 @@
 import unittest
 from decimal import Decimal
 
-from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.metrics.metrics import NightwatchMetrics
 from Nightwatch.models.order import Status
 from Nightwatch.models.order_factory import OrderFactoryConfig, SignalDeduplicator, create_order_from_signal
 from Nightwatch.models.signal import Side
