@@ -73,3 +73,14 @@ class Portfolio(BaseModel):
             self.cash += notional - fill.fee
             self.positions[fill.symbol] = current_qty - fill.qty
         self.last_prices[fill.symbol] = fill.price
+
+    def revert_fill(self, fill: Fill) -> None:
+        """Undo the cash and position mutation produced by :meth:`apply_fill`."""
+        notional = fill.qty * fill.price
+        current_qty = self.position_qty(fill.symbol)
+        if fill.side is Side.BUY:
+            self.cash += notional + fill.fee
+            self.positions[fill.symbol] = current_qty - fill.qty
+        else:
+            self.cash -= notional - fill.fee
+            self.positions[fill.symbol] = current_qty + fill.qty

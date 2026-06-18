@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from prometheus_client import CollectorRegistry, Counter, Gauge
+from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram
 
 
 @dataclass
@@ -37,6 +37,9 @@ class NightwatchMetrics:
     position_qty: Gauge = field(init=False)
     equity: Gauge = field(init=False)
     equity_per_symbol: Gauge = field(init=False)
+    db_up: Gauge = field(init=False)
+    db_write_errors_total: Counter = field(init=False)
+    rehydration_duration_seconds: Histogram = field(init=False)
 
     def __post_init__(self) -> None:
         """Create Prometheus counters bound to the instance registry."""
@@ -166,6 +169,21 @@ class NightwatchMetrics:
             "equity_per_symbol",
             "Market value of the held position per symbol (qty * last_price)",
             labelnames=["symbol"],
+            registry=self.registry,
+        )
+        self.db_up = Gauge(
+            "db_up",
+            "1 when the Postgres connection pool is alive, 0 otherwise",
+            registry=self.registry,
+        )
+        self.db_write_errors_total = Counter(
+            "db_write_errors_total",
+            "Total number of database write failures across all Postgres repositories",
+            registry=self.registry,
+        )
+        self.rehydration_duration_seconds = Histogram(
+            "rehydration_duration_seconds",
+            "Time spent loading persisted portfolio state at startup",
             registry=self.registry,
         )
 

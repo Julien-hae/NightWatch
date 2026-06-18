@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from decimal import Decimal
-from typing import Protocol
 
 import asyncpg  # type: ignore[import-untyped]
 
+from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.fill import Fill
 from Nightwatch.models.order import Order
 from Nightwatch.models.signal import Signal
@@ -16,60 +17,24 @@ from Nightwatch.repositories import OrderCreateResult
 LOGGER = logging.getLogger(__name__)
 
 
-class AsyncSignalRepo(Protocol):
-    """Async persistence port for signals."""
-
-    async def save(self, signal: Signal) -> None:
-        """Persist a signal (upsert)."""
-
-
-class AsyncOrderRepo(Protocol):
-    """Async persistence port for orders."""
-
-    async def create(self, order: Order) -> OrderCreateResult:
-        """Create an order once, or return already-exists on duplicate idempotency key."""
-
-
-class AsyncFillRepo(Protocol):
-    """Async persistence port for fills."""
-
-    async def append(self, fill: Fill) -> None:
-        """Append a fill."""
-
-
-class AsyncPositionRepo(Protocol):
-    """Async persistence port for positions."""
-
-    async def get(self, symbol: str) -> Decimal:
-        """Return current quantity for *symbol* or zero if absent."""
-
-    async def get_all(self) -> dict[str, Decimal]:
-        """Return all positions as a mapping of symbol to quantity."""
-
-    async def upsert(self, symbol: str, qty: Decimal) -> None:
-        """Insert or replace the quantity for *symbol*."""
-
-
-class AsyncPortfolioStateRepo(Protocol):
-    """Async persistence port for portfolio state (cash balance)."""
-
-    async def get_cash(self) -> Decimal:
-        """Return current cash balance, or zero if not found."""
-
-    async def save_cash(self, cash: Decimal) -> None:
-        """Persist or update cash balance."""
+def _record_write_error(metrics: NightwatchMetrics | None) -> None:
+    """Increment the db_write_errors_total counter when metrics are wired."""
+    if metrics is not None:
+        metrics.db_write_errors_total.inc()
 
 
 class PgSignalRepo:
     """Postgres signal repository with upsert semantics."""
 
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(self, pool: asyncpg.Pool, metrics: NightwatchMetrics | None = None) -> None:
         """Initialise with an asyncpg connection pool.
 
         Args:
             pool: Shared asyncpg connection pool.
+            metrics: Optional metrics instance used to count write failures.
         """
         self._pool = pool
+        self._metrics = metrics
 
     async def save(self, signal: Signal) -> None:
         """Upsert *signal* by its uid.
@@ -89,18 +54,22 @@ class PgSignalRepo:
                     schema_version = EXCLUDED.schema_version,
                     ts = EXCLUDED.ts
         """
-        async with self._pool.acquire() as conn:
-            await conn.execute(
-                sql,
-                signal.uid,
-                signal.symbol,
-                signal.side.value,
-                signal.strength,
-                signal.strategy,
-                signal.source,
-                signal.schema_version,
-                signal.timestamp,
-            )
+        try:
+            async with self._pool.acquire() as conn:
+                await conn.execute(
+                    sql,
+                    signal.uid,
+                    signal.symbol,
+                    signal.side.value,
+                    signal.strength,
+                    signal.strategy,
+                    signal.source,
+                    signal.schema_version,
+                    signal.timestamp,
+                )
+        except Exception:
+            _record_write_error(self._metrics)
+            raise
 
 
 class PgOrderRepo:
@@ -109,13 +78,15 @@ class PgOrderRepo:
     The idempotency key is ``order.signal_id``, matching the in-memory repo.
     """
 
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(self, pool: asyncpg.Pool, metrics: NightwatchMetrics | None = None) -> None:
         """Initialise with an asyncpg connection pool.
 
         Args:
             pool: Shared asyncpg connection pool.
+            metrics: Optional metrics instance used to count write failures.
         """
         self._pool = pool
+        self._metrics = metrics
 
     async def create(self, order: Order) -> OrderCreateResult:
         """Insert *order*, skipping on duplicate idempotency key.
@@ -131,18 +102,22 @@ class PgOrderRepo:
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (idempotency_key) DO NOTHING
         """
-        async with self._pool.acquire() as conn:
-            status = await conn.execute(
-                sql,
-                order.order_id,
-                order.signal_id,  # idempotency_key == signal_id
-                order.signal_id,
-                order.symbol,
-                order.side.value,
-                order.qty,
-                order.status.value,
-                order.created_at,
-            )
+        try:
+            async with self._pool.acquire() as conn:
+                status = await conn.execute(
+                    sql,
+                    order.order_id,
+                    order.signal_id,  # idempotency_key == signal_id
+                    order.signal_id,
+                    order.symbol,
+                    order.side.value,
+                    order.qty,
+                    order.status.value,
+                    order.created_at,
+                )
+        except Exception:
+            _record_write_error(self._metrics)
+            raise
         inserted = int(status.split()[-1])
         return OrderCreateResult.CREATED if inserted == 1 else OrderCreateResult.ALREADY_EXISTS
 
@@ -150,13 +125,15 @@ class PgOrderRepo:
 class PgFillRepo:
     """Postgres append-only fill repository."""
 
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(self, pool: asyncpg.Pool, metrics: NightwatchMetrics | None = None) -> None:
         """Initialise with an asyncpg connection pool.
 
         Args:
             pool: Shared asyncpg connection pool.
+            metrics: Optional metrics instance used to count write failures.
         """
         self._pool = pool
+        self._metrics = metrics
 
     async def append(self, fill: Fill) -> None:
         """Insert *fill* into the fills table.
@@ -168,30 +145,36 @@ class PgFillRepo:
             INSERT INTO fills (fill_id, order_id, symbol, side, qty, price, fee, ts)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         """
-        async with self._pool.acquire() as conn:
-            await conn.execute(
-                sql,
-                fill.fill_id,
-                fill.order_id,
-                fill.symbol,
-                fill.side.value,
-                fill.qty,
-                fill.price,
-                fill.fee,
-                fill.ts,
-            )
+        try:
+            async with self._pool.acquire() as conn:
+                await conn.execute(
+                    sql,
+                    fill.fill_id,
+                    fill.order_id,
+                    fill.symbol,
+                    fill.side.value,
+                    fill.qty,
+                    fill.price,
+                    fill.fee,
+                    fill.ts,
+                )
+        except Exception:
+            _record_write_error(self._metrics)
+            raise
 
 
 class PgPositionRepo:
     """Postgres position repository with upsert semantics."""
 
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(self, pool: asyncpg.Pool, metrics: NightwatchMetrics | None = None) -> None:
         """Initialise with an asyncpg connection pool.
 
         Args:
             pool: Shared asyncpg connection pool.
+            metrics: Optional metrics instance used to count write failures.
         """
         self._pool = pool
+        self._metrics = metrics
 
     async def get(self, symbol: str) -> Decimal:
         """Return current quantity for *symbol*, or zero if absent.
@@ -232,20 +215,26 @@ class PgPositionRepo:
                 SET qty = EXCLUDED.qty,
                     updated_at = EXCLUDED.updated_at
         """
-        async with self._pool.acquire() as conn:
-            await conn.execute(sql, symbol, qty)
+        try:
+            async with self._pool.acquire() as conn:
+                await conn.execute(sql, symbol, qty)
+        except Exception:
+            _record_write_error(self._metrics)
+            raise
 
 
 class PgEquitySnapshotRepo:
     """Postgres repository for equity snapshots."""
 
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(self, pool: asyncpg.Pool, metrics: NightwatchMetrics | None = None) -> None:
         """Initialise with an asyncpg connection pool.
 
         Args:
             pool: Shared asyncpg connection pool.
+            metrics: Optional metrics instance used to count write failures.
         """
         self._pool = pool
+        self._metrics = metrics
 
     async def insert(self, equity: Decimal, cash: Decimal) -> None:
         """Append an equity snapshot row.
@@ -255,20 +244,26 @@ class PgEquitySnapshotRepo:
             cash: Cash component of the portfolio.
         """
         sql = "INSERT INTO equity_snapshots (equity, cash, ts) VALUES ($1, $2, NOW())"
-        async with self._pool.acquire() as conn:
-            await conn.execute(sql, equity, cash)
+        try:
+            async with self._pool.acquire() as conn:
+                await conn.execute(sql, equity, cash)
+        except Exception:
+            _record_write_error(self._metrics)
+            raise
 
 
 class PgPortfolioStateRepo:
-    """Postgres repository for portfolio state (cash balance) with single-row semantics."""
+    """Postgres repository for portfolio state (single-row cash balance)."""
 
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(self, pool: asyncpg.Pool, metrics: NightwatchMetrics | None = None) -> None:
         """Initialise with an asyncpg connection pool.
 
         Args:
             pool: Shared asyncpg connection pool.
+            metrics: Optional metrics instance used to count write failures.
         """
         self._pool = pool
+        self._metrics = metrics
 
     async def get_cash(self) -> Decimal:
         """Return current cash balance, or zero if not found.
@@ -276,7 +271,7 @@ class PgPortfolioStateRepo:
         Returns:
             Current cash balance, or ``Decimal("0")`` when portfolio_state is empty.
         """
-        sql = "SELECT cash FROM portfolio_state LIMIT 1"
+        sql = "SELECT cash FROM portfolio_state WHERE id = 1"
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(sql)
         if row is None:
@@ -284,20 +279,72 @@ class PgPortfolioStateRepo:
         return Decimal(str(row["cash"]))
 
     async def save_cash(self, cash: Decimal) -> None:
-        """Persist or update cash balance (single row).
+        """Persist or update the single-row cash balance.
 
         Args:
             cash: Cash balance to persist.
         """
         sql = """
-            INSERT INTO portfolio_state (cash, updated_at)
-            VALUES ($1, NOW())
-            ON CONFLICT (cash) DO UPDATE
-                SET updated_at = NOW()
+            INSERT INTO portfolio_state (id, cash, updated_at)
+            VALUES (1, $1, NOW())
+            ON CONFLICT (id) DO UPDATE
+                SET cash = EXCLUDED.cash,
+                    updated_at = NOW()
         """
+        try:
+            async with self._pool.acquire() as conn:
+                await conn.execute(sql, cash)
+        except Exception:
+            _record_write_error(self._metrics)
+            raise
+
+
+class PgProcessingCursorRepo:
+    """Postgres repository for the single-row processing cursor."""
+
+    def __init__(self, pool: asyncpg.Pool, metrics: NightwatchMetrics | None = None) -> None:
+        """Initialise with an asyncpg connection pool.
+
+        Args:
+            pool: Shared asyncpg connection pool.
+            metrics: Optional metrics instance used to count write failures.
+        """
+        self._pool = pool
+        self._metrics = metrics
+
+    async def get_last_signal_id(self) -> uuid.UUID | None:
+        """Return the last processed signal id, or None when no rows exist.
+
+        Returns:
+            The UUID of the last successfully processed signal, or ``None``.
+        """
+        sql = "SELECT last_signal_id FROM processing_cursor WHERE id = 1"
         async with self._pool.acquire() as conn:
-            await conn.execute("DELETE FROM portfolio_state")
-            await conn.execute(sql, cash)
+            row = await conn.fetchrow(sql)
+        if row is None or row["last_signal_id"] is None:
+            return None
+        value = row["last_signal_id"]
+        return value if isinstance(value, uuid.UUID) else uuid.UUID(str(value))
+
+    async def save_last_signal_id(self, signal_id: uuid.UUID) -> None:
+        """Persist *signal_id* as the latest processed signal.
+
+        Args:
+            signal_id: Signal UUID that has just been durably processed.
+        """
+        sql = """
+            INSERT INTO processing_cursor (id, last_signal_id, updated_at)
+            VALUES (1, $1, NOW())
+            ON CONFLICT (id) DO UPDATE
+                SET last_signal_id = EXCLUDED.last_signal_id,
+                    updated_at = NOW()
+        """
+        try:
+            async with self._pool.acquire() as conn:
+                await conn.execute(sql, signal_id)
+        except Exception:
+            _record_write_error(self._metrics)
+            raise
 
 
 class PgAtomicTradeWriter:
@@ -307,9 +354,15 @@ class PgAtomicTradeWriter:
     When the order already exists, no additional writes are performed.
     """
 
-    def __init__(self, pool: asyncpg.Pool) -> None:
-        """Initialise with an asyncpg connection pool."""
+    def __init__(self, pool: asyncpg.Pool, metrics: NightwatchMetrics | None = None) -> None:
+        """Initialise with an asyncpg connection pool.
+
+        Args:
+            pool: Shared asyncpg connection pool.
+            metrics: Optional metrics instance used to count write failures.
+        """
         self._pool = pool
+        self._metrics = metrics
 
     async def write_trade(
         self,
@@ -350,44 +403,56 @@ class PgAtomicTradeWriter:
                     updated_at = EXCLUDED.updated_at
         """
         upsert_cash_sql = """
-            INSERT INTO portfolio_state (cash, updated_at)
-            VALUES ($1, NOW())
-            ON CONFLICT (cash) DO UPDATE
-                SET updated_at = NOW()
+            INSERT INTO portfolio_state (id, cash, updated_at)
+            VALUES (1, $1, NOW())
+            ON CONFLICT (id) DO UPDATE
+                SET cash = EXCLUDED.cash,
+                    updated_at = NOW()
+        """
+        upsert_cursor_sql = """
+            INSERT INTO processing_cursor (id, last_signal_id, updated_at)
+            VALUES (1, $1, NOW())
+            ON CONFLICT (id) DO UPDATE
+                SET last_signal_id = EXCLUDED.last_signal_id,
+                    updated_at = NOW()
         """
         insert_equity_sql = "INSERT INTO equity_snapshots (equity, cash, ts) VALUES ($1, $2, NOW())"
 
-        async with self._pool.acquire() as conn:
-            async with conn.transaction():
-                status = await conn.execute(
-                    insert_order_sql,
-                    order.order_id,
-                    order.signal_id,
-                    order.signal_id,
-                    order.symbol,
-                    order.side.value,
-                    order.qty,
-                    order.status.value,
-                    order.created_at,
-                )
-                inserted = int(status.split()[-1])
-                if inserted == 0:
-                    return OrderCreateResult.ALREADY_EXISTS
+        try:
+            async with self._pool.acquire() as conn:
+                async with conn.transaction():
+                    status = await conn.execute(
+                        insert_order_sql,
+                        order.order_id,
+                        order.signal_id,
+                        order.signal_id,
+                        order.symbol,
+                        order.side.value,
+                        order.qty,
+                        order.status.value,
+                        order.created_at,
+                    )
+                    inserted = int(status.split()[-1])
+                    if inserted == 0:
+                        return OrderCreateResult.ALREADY_EXISTS
 
-                await conn.execute(
-                    insert_fill_sql,
-                    fill.fill_id,
-                    fill.order_id,
-                    fill.symbol,
-                    fill.side.value,
-                    fill.qty,
-                    fill.price,
-                    fill.fee,
-                    fill.ts,
-                )
-                await conn.execute(upsert_position_sql, fill.symbol, position_qty)
-                await conn.execute("DELETE FROM portfolio_state")
-                await conn.execute(upsert_cash_sql, cash)
-                await conn.execute(insert_equity_sql, equity, cash)
+                    await conn.execute(
+                        insert_fill_sql,
+                        fill.fill_id,
+                        fill.order_id,
+                        fill.symbol,
+                        fill.side.value,
+                        fill.qty,
+                        fill.price,
+                        fill.fee,
+                        fill.ts,
+                    )
+                    await conn.execute(upsert_position_sql, fill.symbol, position_qty)
+                    await conn.execute(upsert_cash_sql, cash)
+                    await conn.execute(upsert_cursor_sql, order.signal_id)
+                    await conn.execute(insert_equity_sql, equity, cash)
+        except Exception:
+            _record_write_error(self._metrics)
+            raise
 
         return OrderCreateResult.CREATED

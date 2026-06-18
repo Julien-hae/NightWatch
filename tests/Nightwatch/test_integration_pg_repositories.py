@@ -16,44 +16,24 @@ from typing import Any, Coroutine, TypeVar
 
 import asyncpg  # type: ignore[import-untyped]
 from alembic import command
-from alembic.config import Config
 from sqlalchemy import create_engine, text
 
-from Nightwatch.pg_repositories import PgEquitySnapshotRepo, PgFillRepo, PgOrderRepo, PgPositionRepo, PgSignalRepo
+from Nightwatch.pg_repositories import (
+    PgEquitySnapshotRepo,
+    PgFillRepo,
+    PgOrderRepo,
+    PgPortfolioStateRepo,
+    PgPositionRepo,
+    PgProcessingCursorRepo,
+    PgSignalRepo,
+)
 from Nightwatch.repositories import OrderCreateResult
+from tests.fixtures.db import RESET_DB_SQL, alembic_cfg, to_pg_dsn
 from tests.fixtures.fill_factory import make_fill
 from tests.fixtures.order_factory import make_order
 from tests.fixtures.signal_factory import make_signal
 
 _T = TypeVar("_T")
-
-
-def _alembic_cfg(database_url: str) -> Config:
-    ini_path = os.path.join(os.path.dirname(__file__), "..", "..", "alembic.ini")
-    cfg = Config(os.path.abspath(ini_path))
-    cfg.set_main_option("sqlalchemy.url", database_url)
-    return cfg
-
-
-def _sync_url(url: str) -> str:
-    for prefix, replacement in (
-        ("postgresql+asyncpg://", "postgresql://"),
-        ("postgres+asyncpg://", "postgresql://"),
-    ):
-        if url.startswith(prefix):
-            return replacement + url[len(prefix) :]
-    return url
-
-
-def _asyncpg_url(url: str) -> str:
-    """Ensure the URL uses the plain postgresql:// scheme for asyncpg."""
-    for prefix, replacement in (
-        ("postgresql+asyncpg://", "postgresql://"),
-        ("postgres+asyncpg://", "postgresql://"),
-    ):
-        if url.startswith(prefix):
-            return replacement + url[len(prefix) :]
-    return url
 
 
 @unittest.skipUnless(os.environ.get("RUN_INTEGRATION"), "Integration tests require RUN_INTEGRATION=1")
@@ -69,18 +49,18 @@ class TestPgRepositories(unittest.TestCase):
         if not raw_url:
             raise unittest.SkipTest("DATABASE_URL is not set")
 
-        sync_url = _sync_url(raw_url)
+        sync_url = to_pg_dsn(raw_url)
         engine = create_engine(sync_url)
 
         # Fresh schema for this test run.
         with engine.connect() as conn:
-            conn.execute(text("DROP TABLE IF EXISTS fills, orders, signals, positions, equity_snapshots, alembic_version CASCADE"))
+            conn.execute(text(RESET_DB_SQL))
             conn.commit()
 
-        command.upgrade(_alembic_cfg(sync_url), "head")
+        command.upgrade(alembic_cfg(sync_url), "head")
         engine.dispose()
 
-        cls.asyncpg_url = _asyncpg_url(raw_url)
+        cls.asyncpg_url = to_pg_dsn(raw_url)
         cls.pool = asyncio.get_event_loop().run_until_complete(asyncpg.create_pool(cls.asyncpg_url, min_size=1, max_size=3))
 
     @classmethod
@@ -215,6 +195,44 @@ class TestPgRepositories(unittest.TestCase):
                 return int(await conn.fetchval("SELECT COUNT(*) FROM equity_snapshots WHERE equity = $1", Decimal("10000.00")))
 
         self.assertGreaterEqual(self.run_async(_count()), 1)
+
+    # ------------------------------------------------------------------ portfolio_state
+
+    def test_save_cash_then_get_cash_round_trip(self) -> None:
+        repo = PgPortfolioStateRepo(self.pool)
+
+        self.run_async(repo.save_cash(Decimal("12345.67")))
+        self.assertEqual(self.run_async(repo.get_cash()), Decimal("12345.67"))
+
+        self.run_async(repo.save_cash(Decimal("890.12")))
+        self.assertEqual(self.run_async(repo.get_cash()), Decimal("890.12"))
+
+        async def _count() -> int:
+            async with self.pool.acquire() as conn:
+                return int(await conn.fetchval("SELECT COUNT(*) FROM portfolio_state"))
+
+        self.assertEqual(self.run_async(_count()), 1)
+
+    # ------------------------------------------------------------------ processing_cursor
+
+    def test_processing_cursor_round_trip(self) -> None:
+        repo = PgProcessingCursorRepo(self.pool)
+
+        self.assertIsNone(self.run_async(repo.get_last_signal_id()))
+
+        sid = uuid.uuid4()
+        self.run_async(repo.save_last_signal_id(sid))
+        self.assertEqual(self.run_async(repo.get_last_signal_id()), sid)
+
+        sid2 = uuid.uuid4()
+        self.run_async(repo.save_last_signal_id(sid2))
+        self.assertEqual(self.run_async(repo.get_last_signal_id()), sid2)
+
+        async def _count() -> int:
+            async with self.pool.acquire() as conn:
+                return int(await conn.fetchval("SELECT COUNT(*) FROM processing_cursor"))
+
+        self.assertEqual(self.run_async(_count()), 1)
 
 
 if __name__ == "__main__":

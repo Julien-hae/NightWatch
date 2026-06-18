@@ -14,7 +14,6 @@ from typing import Any, TypeVar
 
 import asyncpg  # type: ignore[import-untyped]
 from alembic import command
-from alembic.config import Config
 from nats.aio.client import Client as NatsClient
 from nats.js.api import AckPolicy, ConsumerConfig, DeliverPolicy, RetentionPolicy, StorageType, StreamConfig
 from sqlalchemy import create_engine, text
@@ -24,6 +23,7 @@ from Nightwatch.models.order import Order, Status
 from Nightwatch.models.signal import Side
 from Nightwatch.pg_repositories import PgAtomicTradeWriter
 from Nightwatch.repositories import OrderCreateResult
+from tests.fixtures.db import RESET_DB_SQL, alembic_cfg, to_pg_dsn
 from tests.fixtures.nats_server import NatsServerFixture
 
 _T = TypeVar("_T")
@@ -31,33 +31,6 @@ _T = TypeVar("_T")
 _ORDER_STREAM = "ORDER_REQ"
 _ORDER_SUBJECT = "order.request"
 _MIN_REDELIVERY_COUNT = 2
-
-
-def _alembic_cfg(database_url: str) -> Config:
-    ini_path = os.path.join(os.path.dirname(__file__), "..", "..", "alembic.ini")
-    cfg = Config(os.path.abspath(ini_path))
-    cfg.set_main_option("sqlalchemy.url", database_url)
-    return cfg
-
-
-def _sync_url(url: str) -> str:
-    for prefix, replacement in (
-        ("postgresql+asyncpg://", "postgresql://"),
-        ("postgres+asyncpg://", "postgresql://"),
-    ):
-        if url.startswith(prefix):
-            return replacement + url[len(prefix) :]
-    return url
-
-
-def _asyncpg_url(url: str) -> str:
-    for prefix, replacement in (
-        ("postgresql+asyncpg://", "postgresql://"),
-        ("postgres+asyncpg://", "postgresql://"),
-    ):
-        if url.startswith(prefix):
-            return replacement + url[len(prefix) :]
-    return url
 
 
 def _make_order(signal_id: uuid.UUID) -> Order:
@@ -103,18 +76,17 @@ class TestJetStreamTransactionalAck(unittest.TestCase):
         if not raw_url:
             raise unittest.SkipTest("DATABASE_URL is not set")
 
-        sync_url = _sync_url(raw_url)
+        sync_url = to_pg_dsn(raw_url)
         engine = create_engine(sync_url)
         with engine.connect() as conn:
-            conn.execute(
-                text("DROP TABLE IF EXISTS fills, orders, signals, positions, equity_snapshots, portfolio_state, alembic_version CASCADE")
-            )
+            conn.execute(text(RESET_DB_SQL))
             conn.commit()
-        command.upgrade(_alembic_cfg(sync_url), "head")
+        command.upgrade(alembic_cfg(sync_url), "head")
         engine.dispose()
 
-        cls.asyncpg_url = _asyncpg_url(raw_url)
+        cls.asyncpg_url = to_pg_dsn(raw_url)
         cls.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(cls.loop)
         cls.pool = cls.loop.run_until_complete(asyncpg.create_pool(cls.asyncpg_url, min_size=1, max_size=3))
 
         cls.nats = NatsServerFixture(jetstream=True)
@@ -137,6 +109,7 @@ class TestJetStreamTransactionalAck(unittest.TestCase):
                 await conn.execute("DELETE FROM positions")
                 await conn.execute("DELETE FROM equity_snapshots")
                 await conn.execute("DELETE FROM portfolio_state")
+                await conn.execute("DELETE FROM processing_cursor")
             nc = await asyncpg_nats_connect(self.nats.url)
             js = nc.jetstream()
             try:

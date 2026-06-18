@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import copy
+import uuid
+from dataclasses import dataclass
 from decimal import Decimal
 from enum import Enum
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from Nightwatch.models.fill import Fill
 from Nightwatch.models.order import Order
 from Nightwatch.models.portfolio import Portfolio
 from Nightwatch.models.signal import Signal
+
+if TYPE_CHECKING:
+    from Nightwatch.bootstrap import PersistenceContext
 
 
 class OrderCreateResult(str, Enum):
@@ -18,6 +23,89 @@ class OrderCreateResult(str, Enum):
 
     CREATED = "CREATED"
     ALREADY_EXISTS = "ALREADY_EXISTS"
+
+
+class AsyncSignalRepo(Protocol):
+    """Async persistence port for signals."""
+
+    async def save(self, signal: Signal) -> None:
+        """Persist a signal (idempotent upsert)."""
+
+
+class AsyncPositionRepo(Protocol):
+    """Async persistence port for positions."""
+
+    async def get_all(self) -> dict[str, Decimal]:
+        """Return all positions as a mapping of symbol to quantity."""
+
+    async def upsert(self, symbol: str, qty: Decimal) -> None:
+        """Insert or replace the quantity for *symbol*."""
+
+
+class AsyncPortfolioStateRepo(Protocol):
+    """Async persistence port for portfolio state (cash balance)."""
+
+    async def get_cash(self) -> Decimal:
+        """Return current cash balance, or zero if not found."""
+
+    async def save_cash(self, cash: Decimal) -> None:
+        """Persist or update cash balance."""
+
+
+class AsyncEquitySnapshotRepo(Protocol):
+    """Async persistence port for equity snapshots."""
+
+    async def insert(self, equity: Decimal, cash: Decimal) -> None:
+        """Append an equity snapshot row."""
+
+
+class AsyncProcessingCursorRepo(Protocol):
+    """Async persistence port for the processing cursor (last processed signal id)."""
+
+    async def get_last_signal_id(self) -> uuid.UUID | None:
+        """Return the id of the last successfully processed signal, or None."""
+
+    async def save_last_signal_id(self, signal_id: uuid.UUID) -> None:
+        """Persist the id of the last successfully processed signal."""
+
+
+class AsyncTradeWriter(Protocol):
+    """Async port for atomically persisting an order/fill/portfolio update."""
+
+    async def write_trade(
+        self,
+        order: Order,
+        fill: Fill,
+        *,
+        position_qty: Decimal,
+        cash: Decimal,
+        equity: Decimal,
+    ) -> object:
+        """Persist the trade in a single DB transaction."""
+
+
+@dataclass
+class PaperTraderRepos:
+    """Bundle of persistence ports consumed by :class:`PaperTrader`."""
+
+    signal: AsyncSignalRepo | None = None
+    position: AsyncPositionRepo | None = None
+    portfolio_state: AsyncPortfolioStateRepo | None = None
+    equity_snapshot: AsyncEquitySnapshotRepo | None = None
+    processing_cursor: AsyncProcessingCursorRepo | None = None
+    trade_writer: AsyncTradeWriter | None = None
+
+    @classmethod
+    def from_context(cls, ctx: "PersistenceContext") -> "PaperTraderRepos":
+        """Build a fully-populated bundle from a :class:`PersistenceContext`."""
+        return cls(
+            signal=ctx.signal_repo,
+            position=ctx.position_repo,
+            portfolio_state=ctx.portfolio_state_repo,
+            equity_snapshot=ctx.equity_snapshot_repo,
+            processing_cursor=ctx.processing_cursor_repo,
+            trade_writer=ctx.trade_writer,
+        )
 
 
 class SignalRepo(Protocol):
