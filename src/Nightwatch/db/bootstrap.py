@@ -12,9 +12,8 @@ import asyncpg  # type: ignore[import-untyped]
 from alembic import command
 from alembic.config import Config
 
-from Nightwatch.database import to_async_dsn
-from Nightwatch.metrics import NightwatchMetrics
-from Nightwatch.pg_repositories import (
+from Nightwatch.db.database import to_async_dsn
+from Nightwatch.db.pg_repositories import (
     PgAtomicTradeWriter,
     PgEquitySnapshotRepo,
     PgFillRepo,
@@ -24,6 +23,7 @@ from Nightwatch.pg_repositories import (
     PgProcessingCursorRepo,
     PgSignalRepo,
 )
+from Nightwatch.metrics import NightwatchMetrics
 
 LOGGER = logging.getLogger(__name__)
 

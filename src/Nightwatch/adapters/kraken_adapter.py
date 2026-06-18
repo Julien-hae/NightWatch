@@ -11,7 +11,7 @@ from websockets import connect
 from websockets.asyncio.client import ClientConnection
 from websockets.exceptions import WebSocketException
 
-from Nightwatch.exchange_market_adapter import ExchangeMarketAdapter
+from Nightwatch.adapters.exchange_market_adapter import ExchangeMarketAdapter
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
 

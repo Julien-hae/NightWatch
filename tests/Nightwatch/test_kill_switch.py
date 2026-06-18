@@ -5,14 +5,14 @@ import unittest
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from Nightwatch.kill_switch import KillSwitch
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.bot_control_event import BotControlEvent
 from Nightwatch.models.tick_buffer import TickBuffer
-from Nightwatch.risk_engine import RiskEngine
+from Nightwatch.pipeline.kill_switch import KillSwitch
+from Nightwatch.pipeline.risk_engine import RiskEngine
+from Nightwatch.pipeline.strategy_runner import StrategyRunner
 from Nightwatch.rules.max_signal_per_minute_rule import MaxSignalPerMinuteRule
 from Nightwatch.strategies.momentum_burst import MomentumBurstStrategy
-from Nightwatch.strategy_runner import StrategyRunner
 from tests.fixtures.test_strategy import AlwaysSignalStrategy, NoneStrategy
 from tests.fixtures.tick_factory import feed_ticks, make_tick, make_tick_sequence
 

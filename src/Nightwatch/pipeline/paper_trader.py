@@ -7,6 +7,7 @@ import uuid
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from Nightwatch.db.repositories import PaperTraderRepos
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.fill import Fill
 from Nightwatch.models.order import Order
@@ -14,10 +15,9 @@ from Nightwatch.models.order_factory import OrderFactoryConfig, SignalDeduplicat
 from Nightwatch.models.paper_execution import PercentageFeeModel, paper_execute
 from Nightwatch.models.portfolio import Portfolio
 from Nightwatch.models.signal import Signal
-from Nightwatch.repositories import PaperTraderRepos
 
 if TYPE_CHECKING:
-    from Nightwatch.bootstrap import PersistenceContext
+    from Nightwatch.db.bootstrap import PersistenceContext
 
 LOGGER = logging.getLogger(__name__)
 

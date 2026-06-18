@@ -7,7 +7,7 @@ import unittest
 from collections.abc import Coroutine
 from typing import Any
 
-from Nightwatch.kraken_adapter import KrakenAdapter
+from Nightwatch.adapters.kraken_adapter import KrakenAdapter
 from Nightwatch.messaging.publisher import MarketTickPublisher
 from Nightwatch.messaging.subscriber import MarketTickSubscriber
 from Nightwatch.models.market_tick import MarketTick

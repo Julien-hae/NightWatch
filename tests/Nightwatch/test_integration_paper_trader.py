@@ -17,18 +17,18 @@ import asyncpg  # type: ignore[import-untyped]
 from alembic import command
 from sqlalchemy import create_engine, text
 
-from Nightwatch.metrics import NightwatchMetrics
-from Nightwatch.models.order_factory import OrderFactoryConfig
-from Nightwatch.models.paper_execution import PercentageFeeModel
-from Nightwatch.models.signal import Side
-from Nightwatch.paper_trader import PaperTrader
-from Nightwatch.pg_repositories import (
+from Nightwatch.db.pg_repositories import (
     PgEquitySnapshotRepo,
     PgPortfolioStateRepo,
     PgPositionRepo,
     PgProcessingCursorRepo,
 )
-from Nightwatch.repositories import PaperTraderRepos
+from Nightwatch.db.repositories import PaperTraderRepos
+from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.models.order_factory import OrderFactoryConfig
+from Nightwatch.models.paper_execution import PercentageFeeModel
+from Nightwatch.models.signal import Side
+from Nightwatch.pipeline.paper_trader import PaperTrader
 from tests.fixtures.db import RESET_DB_SQL, alembic_cfg, to_pg_dsn
 from tests.fixtures.portfolio_factory import make_portfolio
 from tests.fixtures.signal_factory import make_signal

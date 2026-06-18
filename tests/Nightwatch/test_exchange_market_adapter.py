@@ -2,7 +2,7 @@
 
 import unittest
 
-from Nightwatch.exchange_market_adapter import ExchangeMarketAdapter
+from Nightwatch.adapters.exchange_market_adapter import ExchangeMarketAdapter
 
 
 class TestExchangeMarketAdapter(unittest.TestCase):

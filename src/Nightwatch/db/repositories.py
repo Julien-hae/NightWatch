@@ -15,7 +15,7 @@ from Nightwatch.models.portfolio import Portfolio
 from Nightwatch.models.signal import Signal
 
 if TYPE_CHECKING:
-    from Nightwatch.bootstrap import PersistenceContext
+    from Nightwatch.db.bootstrap import PersistenceContext
 
 
 class OrderCreateResult(str, Enum):

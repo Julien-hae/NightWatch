@@ -8,7 +8,7 @@ from pathlib import Path
 
 from alembic.config import Config
 
-from Nightwatch.database import to_async_dsn
+from Nightwatch.db.database import to_async_dsn
 
 # Re-exported under a neutral name; both sync (SQLAlchemy) and asyncpg accept
 # the ``postgresql://`` form that ``to_async_dsn`` produces.

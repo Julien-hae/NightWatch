@@ -17,14 +17,14 @@ from typing import Any, Coroutine, TypeVar
 from alembic import command
 from sqlalchemy import create_engine, text
 
-from Nightwatch.bootstrap import bootstrap_persistence
+from Nightwatch.db.bootstrap import bootstrap_persistence
+from Nightwatch.db.repositories import PaperTraderRepos
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.order_factory import OrderFactoryConfig
 from Nightwatch.models.paper_execution import PercentageFeeModel
 from Nightwatch.models.portfolio import Portfolio
 from Nightwatch.models.signal import Side
-from Nightwatch.paper_trader import PaperTrader
-from Nightwatch.repositories import PaperTraderRepos
+from Nightwatch.pipeline.paper_trader import PaperTrader
 from tests.fixtures.db import RESET_DB_SQL, alembic_cfg, to_pg_dsn
 from tests.fixtures.signal_factory import make_signal
 

@@ -5,16 +5,16 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from Nightwatch.kill_switch import KillSwitch
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.bot_control_event import BotControlEvent
 from Nightwatch.models.tick_buffer import TickBuffer
-from Nightwatch.risk_engine import RiskEngine
+from Nightwatch.pipeline.kill_switch import KillSwitch
+from Nightwatch.pipeline.risk_engine import RiskEngine
+from Nightwatch.pipeline.strategy_runner import StrategyRunner
 from Nightwatch.rules.cooldown_rule import CooldownRule
 from Nightwatch.rules.max_signal_per_minute_rule import MaxSignalPerMinuteRule
 from Nightwatch.rules.min_trade_strength_rule import MinTradeStrengthRule
 from Nightwatch.strategies.momentum_burst import MomentumBurstStrategy
-from Nightwatch.strategy_runner import StrategyRunner
 from tests.fixtures.tick_factory import feed_ticks, make_tick, make_tick_sequence
 
 
@@ -63,7 +63,7 @@ class TestStrategyRunner(unittest.TestCase):
 
     def test_logging_contains_required_fields(self) -> None:
         """Test that the logs contain the required fields when emitting signals."""
-        with self.assertLogs("Nightwatch.strategy_runner", level="DEBUG") as log:
+        with self.assertLogs("Nightwatch.pipeline.strategy_runner", level="DEBUG") as log:
             ticks = make_tick_sequence(
                 prices=[Decimal("100"), Decimal("105"), Decimal("115")], start=self.start_time, interval_sec=5.0, symbol="BTC/USD"
             )
@@ -134,7 +134,7 @@ class TestStrategyRunner(unittest.TestCase):
         risk_engine = RiskEngine(rules=[MinTradeStrengthRule(min_strength=50.0)])
         runner = StrategyRunner(strategy=strategy, buffer=buffer, metric=metric, risk_engine=risk_engine)
 
-        with self.assertLogs("Nightwatch.strategy_runner", level="INFO") as log:
+        with self.assertLogs("Nightwatch.pipeline.strategy_runner", level="INFO") as log:
             ticks = make_tick_sequence(
                 prices=[Decimal("100"), Decimal("105"), Decimal("115")], start=self.start_time, interval_sec=5.0, symbol="BTC/USD"
             )
@@ -249,7 +249,7 @@ class TestStrategyRunner(unittest.TestCase):
         risk_engine = RiskEngine(rules=[MinTradeStrengthRule(min_strength=50.0)])
         runner = StrategyRunner(strategy=strategy, buffer=buffer, metric=metric, risk_engine=risk_engine)
 
-        with self.assertLogs("Nightwatch.strategy_runner", level="INFO") as log:
+        with self.assertLogs("Nightwatch.pipeline.strategy_runner", level="INFO") as log:
             ticks = make_tick_sequence(
                 prices=[Decimal("100"), Decimal("105"), Decimal("115")], start=self.start_time, interval_sec=5.0, symbol="BTC/USD"
             )
@@ -326,7 +326,7 @@ class TestStrategyRunner(unittest.TestCase):
         runner.on_market_tick(btc_ticks[-1])  # suppressed; sets _was_killed = True
         kill_switch.apply(BotControlEvent(kill=False, reason="test", timestamp=self.start_time))
 
-        with self.assertLogs("Nightwatch.strategy_runner", level="INFO") as log:
+        with self.assertLogs("Nightwatch.pipeline.strategy_runner", level="INFO") as log:
             runner.on_market_tick(eth_ticks[0])  # first tick after resume triggers buffer clear log
 
         log_output = "\n".join(log.output)

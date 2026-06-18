@@ -24,12 +24,12 @@ from decimal import Decimal
 
 import uvicorn
 
+from Nightwatch.adapters.kraken_adapter import KrakenAdapter
 from Nightwatch.api import create_app
-from Nightwatch.bootstrap import bootstrap_persistence
 from Nightwatch.common.logging_configuration import configure_logger
-from Nightwatch.database import DatabaseConnector
-from Nightwatch.kill_switch import KillSwitch
-from Nightwatch.kraken_adapter import KrakenAdapter
+from Nightwatch.db.bootstrap import bootstrap_persistence
+from Nightwatch.db.database import DatabaseConnector
+from Nightwatch.db.repositories import PaperTraderRepos
 from Nightwatch.messaging.control_event_subscriber import ControlEventSubscriber
 from Nightwatch.messaging.nats_connection import NatsConnector
 from Nightwatch.metrics import NightwatchMetrics
@@ -40,11 +40,11 @@ from Nightwatch.models.paper_execution import PercentageFeeModel
 from Nightwatch.models.portfolio import Portfolio
 from Nightwatch.models.service_health import ServiceHealth
 from Nightwatch.models.tick_buffer import TickBuffer
-from Nightwatch.paper_trader import PaperTrader
-from Nightwatch.repositories import PaperTraderRepos
-from Nightwatch.risk_engine import RiskEngine
+from Nightwatch.pipeline.kill_switch import KillSwitch
+from Nightwatch.pipeline.paper_trader import PaperTrader
+from Nightwatch.pipeline.risk_engine import RiskEngine
+from Nightwatch.pipeline.strategy_runner import StrategyRunner
 from Nightwatch.strategies.momentum_burst import MomentumBurstStrategy
-from Nightwatch.strategy_runner import StrategyRunner
 
 LOGGER = logging.getLogger(__name__)
 

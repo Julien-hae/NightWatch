@@ -6,7 +6,7 @@ import unittest
 from dataclasses import dataclass
 from decimal import Decimal
 
-from Nightwatch.repositories import InMemoryOrderRepo, InMemoryPositionRepo, OrderCreateResult
+from Nightwatch.db.repositories import InMemoryOrderRepo, InMemoryPositionRepo, OrderCreateResult
 from tests.fixtures.order_factory import make_order
 
 

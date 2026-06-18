@@ -18,7 +18,7 @@ import asyncpg  # type: ignore[import-untyped]
 from alembic import command
 from sqlalchemy import create_engine, text
 
-from Nightwatch.pg_repositories import (
+from Nightwatch.db.pg_repositories import (
     PgEquitySnapshotRepo,
     PgFillRepo,
     PgOrderRepo,
@@ -27,7 +27,7 @@ from Nightwatch.pg_repositories import (
     PgProcessingCursorRepo,
     PgSignalRepo,
 )
-from Nightwatch.repositories import OrderCreateResult
+from Nightwatch.db.repositories import OrderCreateResult
 from tests.fixtures.db import RESET_DB_SQL, alembic_cfg, to_pg_dsn
 from tests.fixtures.fill_factory import make_fill
 from tests.fixtures.order_factory import make_order

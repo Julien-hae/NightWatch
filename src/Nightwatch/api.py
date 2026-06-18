@@ -7,12 +7,12 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-from Nightwatch.bootstrap import PersistenceContext, bootstrap_persistence
-from Nightwatch.database import DatabaseConnector
+from Nightwatch.db.bootstrap import PersistenceContext, bootstrap_persistence
+from Nightwatch.db.database import DatabaseConnector
 from Nightwatch.messaging.nats_connection import NatsConnector
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.service_health import ServiceHealth
-from Nightwatch.paper_trader import PaperTrader
+from Nightwatch.pipeline.paper_trader import PaperTrader
 
 LOGGER = logging.getLogger(__name__)
 

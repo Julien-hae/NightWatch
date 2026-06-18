@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 
 from prometheus_client import CollectorRegistry
 
-from Nightwatch.kraken_adapter import KrakenAdapter
+from Nightwatch.adapters.kraken_adapter import KrakenAdapter
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
 
@@ -78,7 +78,7 @@ class TestKrakenAdapter(unittest.TestCase):
         market_tick = self.adapter.parse_message(None)
         self.assertIsNone(market_tick)
 
-    @patch("Nightwatch.kraken_adapter.connect", new_callable=AsyncMock)
+    @patch("Nightwatch.adapters.kraken_adapter.connect", new_callable=AsyncMock)
     def test_connect(self, mock_connect: AsyncMock) -> None:
         """Test the connect method of the KrakenAdapter class."""
         mock_ws = AsyncMock()

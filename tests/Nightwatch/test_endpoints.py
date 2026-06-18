@@ -7,7 +7,7 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from Nightwatch.api import create_app
-from Nightwatch.database import DatabaseConnector
+from Nightwatch.db.database import DatabaseConnector
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.service_health import ServiceHealth
 

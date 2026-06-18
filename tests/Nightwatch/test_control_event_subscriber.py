@@ -11,11 +11,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 from prometheus_client import CollectorRegistry
 
-from Nightwatch.kill_switch import KillSwitch
 from Nightwatch.messaging.control_event_subscriber import _MAX_DELIVER, ControlEventSubscriber
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.bot_control_event import BotControlEvent
 from Nightwatch.models.nats_config import NatsConnectionConfig
+from Nightwatch.pipeline.kill_switch import KillSwitch
 
 
 def _counter_value(counter: Any) -> float:

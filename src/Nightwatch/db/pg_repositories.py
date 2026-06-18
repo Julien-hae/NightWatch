@@ -8,11 +8,11 @@ from decimal import Decimal
 
 import asyncpg  # type: ignore[import-untyped]
 
+from Nightwatch.db.repositories import OrderCreateResult
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.fill import Fill
 from Nightwatch.models.order import Order
 from Nightwatch.models.signal import Signal
-from Nightwatch.repositories import OrderCreateResult
 
 LOGGER = logging.getLogger(__name__)
 
