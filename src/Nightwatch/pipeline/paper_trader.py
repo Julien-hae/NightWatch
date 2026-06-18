@@ -104,7 +104,7 @@ class PaperTrader:
         if self._metrics is not None:
             self._metrics.orders_created_total.labels(symbol=order.symbol, side=order.side.value).inc()
             self._metrics.orders_filled_total.labels(symbol=order.symbol, side=order.side.value).inc()
-            self._metrics.fees_paid_total.labels(symbol=order.symbol).inc(float(fill.fee))
+            self._metrics.fees_paid_total.inc(float(fill.fee))
         self._refresh_portfolio_metrics()
         self._log_order_filled(order, fill)
         return fill
@@ -283,7 +283,7 @@ class PaperTrader:
         if self._metrics is not None:
             self._metrics.orders_created_total.labels(symbol=order.symbol, side=order.side.value).inc()
             self._metrics.orders_filled_total.labels(symbol=order.symbol, side=order.side.value).inc()
-            self._metrics.fees_paid_total.labels(symbol=order.symbol).inc(float(fill.fee))
+            self._metrics.fees_paid_total.inc(float(fill.fee))
         self._refresh_portfolio_metrics()
         self._log_order_filled(order, fill)
         return fill

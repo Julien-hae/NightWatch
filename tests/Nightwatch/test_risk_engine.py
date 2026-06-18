@@ -91,7 +91,12 @@ class TestRiskEngine(unittest.TestCase):
         risk_decision = risk_engine.evaluate(self.signal)
         self.assertFalse(risk_decision.allowed)
         self.assertEqual(
-            self.metrics.get_counter_value(self.metrics.signals_rejected_total, symbol=self.signal.symbol, rule="CooldownRule"), 1
+            self.metrics.get_counter_value(
+                self.metrics.signals_rejected_total,
+                symbol=self.signal.symbol,
+                reason="Cooldown active",
+            ),
+            1,
         )
 
     def test_create_default_rule_order(self) -> None:

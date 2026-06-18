@@ -94,7 +94,7 @@ class TestPaperTraderProcessSignal(unittest.TestCase):
             1.0,
         )
         self.assertAlmostEqual(
-            metrics.get_counter_value(metrics.fees_paid_total, symbol="BTC/USD") or 0.0,
+            metrics.get_counter_value(metrics.fees_paid_total) or 0.0,
             float(fill.fee),
         )
         self.assertAlmostEqual(metrics.cash_balance._value.get(), float(portfolio.cash))
@@ -216,7 +216,7 @@ class TestMetricsEndpointAfterPaperTrade(unittest.TestCase):
         body = response.text
         self.assertIn('orders_created_total{side="BUY",symbol="BTC/USD"} 1.0', body)
         self.assertIn('orders_filled_total{side="BUY",symbol="BTC/USD"} 1.0', body)
-        self.assertIn('fees_paid_total{symbol="BTC/USD"}', body)
+        self.assertRegex(body, r"(?m)^fees_paid_total\s+")
         self.assertIn('position_qty{symbol="BTC/USD"}', body)
         self.assertIn("cash_balance", body)
         self.assertIn("equity", body)

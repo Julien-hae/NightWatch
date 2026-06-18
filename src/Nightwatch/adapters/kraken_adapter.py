@@ -105,7 +105,7 @@ class KrakenAdapter(ExchangeMarketAdapter):
                 parsed = self.parse_message(json.loads(raw))
                 if parsed is not None:
                     if self._metrics is not None:
-                        self._metrics.ticks_received_total.inc()
+                        self._metrics.ticks_received_total.labels(symbol=parsed.symbol).inc()
                     yield parsed
             except json.JSONDecodeError as exc:
                 if self._metrics is not None:
