@@ -1,0 +1,156 @@
+{
+  "id": null,
+  "uid": "nightwatch-trading",
+  "title": "Trading",
+  "tags": ["nightwatch", "trading", "paper"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Signals/sec (BUY vs SELL)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (side) (rate(signals_total[1m]))",
+          "legendFormat": "{{side}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {"unit": "ops"}
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Rejected Signals/sec by Reason",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (reason) (rate(signals_rejected_total[1m]))",
+          "legendFormat": "{{reason}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {"unit": "ops"}
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Orders Filled/sec",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (symbol, side) (rate(orders_filled_total[1m]))",
+          "legendFormat": "{{symbol}} {{side}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {"unit": "ops"}
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Position Qty",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "position_qty",
+          "legendFormat": "{{symbol}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Cash Balance",
+      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 16},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "cash_balance"
+        }
+      ],
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {"unit": "currencyUSD"}
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Equity",
+      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 16},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "equity"
+        }
+      ],
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {"unit": "currencyUSD"}
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Fees Paid/sec",
+      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 16},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(fees_paid_total[5m])",
+          "legendFormat": "fees/s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {"unit": "currencyUSD"}
+      }
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  }
+}

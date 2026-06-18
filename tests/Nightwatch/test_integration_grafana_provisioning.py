@@ -68,6 +68,14 @@ class TestGrafanaProvisioningIntegration(unittest.TestCase):
         titles = [item.get("title") for item in payload if isinstance(item, dict)]
         self.assertIn("Bot Health", titles)
 
+    def test_trading_dashboard_is_provisioned(self) -> None:
+        payload = self._get_payload("/api/search?query=Trading", requires_auth=True)
+        if not isinstance(payload, list):
+            self.fail(f"Expected dashboard search payload to be a list, got {type(payload).__name__}")
+
+        titles = [item.get("title") for item in payload if isinstance(item, dict)]
+        self.assertIn("Trading", titles)
+
 
 if __name__ == "__main__":
     unittest.main()
