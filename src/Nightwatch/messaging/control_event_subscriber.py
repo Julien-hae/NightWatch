@@ -8,8 +8,9 @@ import uuid
 from typing import Any, Awaitable, Callable
 
 from nats.aio.subscription import Subscription
-from nats.js.api import AckPolicy, ConsumerConfig, DeliverPolicy
+from nats.js.api import AckPolicy, ConsumerConfig, DeliverPolicy, RetentionPolicy, StorageType, StreamConfig
 from nats.js.client import JetStreamContext
+from nats.js.errors import NotFoundError
 from pydantic import ValidationError
 
 from Nightwatch.messaging.control_event_publisher import CONTROL_STREAM_NAME, CONTROL_SUBJECT
@@ -166,6 +167,31 @@ class ControlEventSubscriber(NatsConnector):
             await self.connect()
 
         js = self.client.jetstream()
+
+        # Ensure the stream exists before attempting to subscribe.  On a
+        # freshly-started NATS server the stream is absent and js.subscribe
+        # raises NotFoundError.  Creating it here is idempotent — if it
+        # already exists stream_info succeeds and we skip add_stream.
+        try:
+            await js.stream_info(CONTROL_STREAM_NAME)
+        except NotFoundError:
+            LOGGER.info("JetStream stream '%s' not found — creating it now.", CONTROL_STREAM_NAME)
+            from Nightwatch.messaging.control_event_publisher import _STREAM_MAX_AGE_SECONDS, _STREAM_MAX_MSGS  # noqa: PLC0415
+
+            await js.add_stream(
+                config=StreamConfig(
+                    name=CONTROL_STREAM_NAME,
+                    subjects=[CONTROL_SUBJECT],
+                    storage=StorageType.FILE,
+                    retention=RetentionPolicy.LIMITS,
+                    max_msgs=_STREAM_MAX_MSGS,
+                    max_age=_STREAM_MAX_AGE_SECONDS,
+                )
+            )
+            LOGGER.info("JetStream stream '%s' created.", CONTROL_STREAM_NAME)
+            kill_switch.mark_ready()
+            return 0
+
         drain_consumer_name = f"drain-consumer-{self._uid}"
 
         sub = await js.subscribe(
