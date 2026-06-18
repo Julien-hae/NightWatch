@@ -6,6 +6,7 @@ Requires both ``RUN_INTEGRATION=1`` and a reachable Postgres pointed to by
 Tests:
 - Run migrations on an empty DB → all expected tables exist.
 - Insert two orders with the same ``idempotency_key`` → second insert fails.
+- Two ``portfolio_state`` rows are rejected by the singleton CHECK.
 """
 
 import os
@@ -14,28 +15,10 @@ import uuid
 from datetime import datetime, timezone
 
 from alembic import command
-from alembic.config import Config
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
 
-
-def _alembic_cfg(database_url: str) -> Config:
-    """Return an Alembic Config pointing at *database_url*."""
-    ini_path = os.path.join(os.path.dirname(__file__), "..", "..", "alembic.ini")
-    cfg = Config(os.path.abspath(ini_path))
-    cfg.set_main_option("sqlalchemy.url", database_url)
-    return cfg
-
-
-def _sync_url(url: str) -> str:
-    """Strip ``+asyncpg`` so SQLAlchemy uses the psycopg2/pg8000 driver."""
-    for prefix, replacement in (
-        ("postgresql+asyncpg://", "postgresql://"),
-        ("postgres+asyncpg://", "postgresql://"),
-    ):
-        if url.startswith(prefix):
-            return replacement + url[len(prefix) :]
-    return url
+from tests.fixtures.db import RESET_DB_SQL, alembic_cfg, to_pg_dsn
 
 
 @unittest.skipUnless(os.environ.get("RUN_INTEGRATION"), "Integration tests require RUN_INTEGRATION=1")
@@ -47,13 +30,13 @@ class TestMigrations(unittest.TestCase):
         if not raw_url:
             self.skipTest("DATABASE_URL is not set; cannot run migration integration tests")
 
-        self.sync_url = _sync_url(raw_url)
+        self.sync_url = to_pg_dsn(raw_url)
         self.engine = create_engine(self.sync_url)
-        self.cfg = _alembic_cfg(self.sync_url)
+        self.cfg = alembic_cfg(self.sync_url)
 
         # Start each test on a clean schema.
         with self.engine.connect() as conn:
-            conn.execute(text("DROP TABLE IF EXISTS fills, orders, signals, positions, equity_snapshots, alembic_version CASCADE"))
+            conn.execute(text(RESET_DB_SQL))
             conn.commit()
 
     def tearDown(self) -> None:
@@ -62,12 +45,30 @@ class TestMigrations(unittest.TestCase):
     def test_upgrade_creates_all_tables(self) -> None:
         command.upgrade(self.cfg, "head")
 
-        expected_tables = {"signals", "orders", "fills", "positions", "equity_snapshots"}
+        expected_tables = {
+            "signals",
+            "orders",
+            "fills",
+            "positions",
+            "equity_snapshots",
+            "portfolio_state",
+            "processing_cursor",
+        }
         with self.engine.connect() as conn:
             rows = conn.execute(text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")).fetchall()
         actual_tables = {row[0] for row in rows}
 
         self.assertTrue(expected_tables.issubset(actual_tables), f"Missing tables: {expected_tables - actual_tables}")
+
+    def test_portfolio_state_rejects_second_row(self) -> None:
+        command.upgrade(self.cfg, "head")
+
+        with self.engine.connect() as conn:
+            conn.execute(text("INSERT INTO portfolio_state (id, cash, updated_at) VALUES (1, 100, NOW())"))
+            conn.commit()
+            with self.assertRaises(IntegrityError):
+                conn.execute(text("INSERT INTO portfolio_state (id, cash, updated_at) VALUES (2, 200, NOW())"))
+                conn.commit()
 
     def test_duplicate_idempotency_key_raises(self) -> None:
         command.upgrade(self.cfg, "head")
@@ -106,5 +107,5 @@ class TestMigrations(unittest.TestCase):
             rows = conn.execute(text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")).fetchall()
         actual_tables = {row[0] for row in rows}
 
-        for table in ("signals", "orders", "fills", "positions", "equity_snapshots"):
+        for table in ("signals", "orders", "fills", "positions", "equity_snapshots", "portfolio_state", "processing_cursor"):
             self.assertNotIn(table, actual_tables)

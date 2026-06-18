@@ -2,8 +2,10 @@
 
 import json
 import logging
+import time
+import uuid
 from decimal import Decimal
-from typing import Protocol
+from typing import TYPE_CHECKING
 
 from Nightwatch.metrics import NightwatchMetrics
 from Nightwatch.models.fill import Fill
@@ -12,44 +14,22 @@ from Nightwatch.models.order_factory import OrderFactoryConfig, SignalDeduplicat
 from Nightwatch.models.paper_execution import PercentageFeeModel, paper_execute
 from Nightwatch.models.portfolio import Portfolio
 from Nightwatch.models.signal import Signal
+from Nightwatch.repositories import PaperTraderRepos
+
+if TYPE_CHECKING:
+    from Nightwatch.bootstrap import PersistenceContext
 
 LOGGER = logging.getLogger(__name__)
-
-
-class AsyncPositionRepo(Protocol):
-    """Async persistence port for positions."""
-
-    async def get_all(self) -> dict[str, Decimal]:
-        """Return all positions as a mapping of symbol to quantity."""
-
-    async def upsert(self, symbol: str, qty: Decimal) -> None:
-        """Insert or replace the quantity for *symbol*."""
-
-
-class AsyncPortfolioStateRepo(Protocol):
-    """Async persistence port for portfolio state (cash balance)."""
-
-    async def get_cash(self) -> Decimal:
-        """Return current cash balance, or zero if not found."""
-
-    async def save_cash(self, cash: Decimal) -> None:
-        """Persist or update cash balance."""
-
-
-class AsyncEquitySnapshotRepo(Protocol):
-    """Async persistence port for equity snapshots."""
-
-    async def insert(self, equity: Decimal, cash: Decimal) -> None:
-        """Append an equity snapshot row."""
 
 
 class PaperTrader:
     """Wire approved signals through the paper trading pipeline.
 
-    Builds an order from the signal, executes it immediately against the latest
-    tick price via :func:`paper_execute`, applies the resulting fill to the
-    portfolio and updates Prometheus metrics. Duplicate signals (already
-    processed) are ignored.
+    Builds an order from each approved signal, executes it against the latest
+    tick price via :func:`paper_execute`, applies the fill to the portfolio,
+    and (when persistence repos are wired via :class:`PaperTraderRepos`)
+    durably stores the trade via :meth:`process_and_persist` / :meth:`rehydrate`.
+    Duplicate signals are deduplicated by ``signal.uid``.
     """
 
     def __init__(
@@ -59,9 +39,7 @@ class PaperTrader:
         fee_model: PercentageFeeModel,
         metrics: NightwatchMetrics | None = None,
         deduplicator: SignalDeduplicator | None = None,
-        position_repo: AsyncPositionRepo | None = None,
-        portfolio_state_repo: AsyncPortfolioStateRepo | None = None,
-        equity_snapshot_repo: AsyncEquitySnapshotRepo | None = None,
+        repos: PaperTraderRepos | None = None,
     ) -> None:
         """Initialise the paper trader.
 
@@ -72,17 +50,15 @@ class PaperTrader:
             metrics: Optional metrics instance for orders/fills/equity counters.
             deduplicator: Optional deduplicator. When omitted, a fresh one is
                 created and wired to the duplicates counter from ``metrics``.
-            position_repo: Optional async position repository for persisting position state.
-            portfolio_state_repo: Optional async portfolio state repo for persisting cash.
-            equity_snapshot_repo: Optional async equity snapshot repo for persisting snapshots.
+            repos: Optional bundle of persistence ports. When omitted, persistence
+                is skipped; see :meth:`attach_repos` to wire one later.
         """
         self._portfolio = portfolio
         self._order_factory_config = order_factory_config
         self._fee_model = fee_model
         self._metrics = metrics
-        self._position_repo = position_repo
-        self._portfolio_state_repo = portfolio_state_repo
-        self._equity_snapshot_repo = equity_snapshot_repo
+        self._repos = repos or PaperTraderRepos()
+        self._last_processed_signal_id: uuid.UUID | None = None
         if deduplicator is None:
             duplicates_counter = metrics.signals_duplicates_total if metrics is not None else None
             deduplicator = SignalDeduplicator(duplicates_counter=duplicates_counter)
@@ -118,8 +94,6 @@ class PaperTrader:
         )
         if order is None:
             return None
-        if self._metrics is not None:
-            self._metrics.orders_created_total.labels(symbol=order.symbol, side=order.side.value).inc()
 
         last_price = self._portfolio.last_price(order.symbol)
         assert last_price is not None  # guaranteed by create_order_from_signal
@@ -128,6 +102,7 @@ class PaperTrader:
         fill = paper_execute(order, last_price, self._fee_model)
         self._portfolio.apply_fill(fill)
         if self._metrics is not None:
+            self._metrics.orders_created_total.labels(symbol=order.symbol, side=order.side.value).inc()
             self._metrics.orders_filled_total.labels(symbol=order.symbol, side=order.side.value).inc()
             self._metrics.fees_paid_total.labels(symbol=order.symbol).inc(float(fill.fee))
         self._refresh_portfolio_metrics()
@@ -183,42 +158,143 @@ class PaperTrader:
         self._metrics.equity.set(float(self._portfolio.equity()))
 
     async def rehydrate(self) -> None:
-        """Load persisted cash and positions from the database and restore portfolio state.
+        """Load persisted cash, positions and processing cursor from the database.
 
         Should be called once at startup to resume from the last known state.
-        Has no effect when either repository is absent.
+        Records elapsed time on ``metrics.rehydration_duration_seconds`` and emits
+        a ``"Rehydrated portfolio"`` log line summarising restored state. Has no
+        effect when the corresponding repository is absent.
         """
-        if self._portfolio_state_repo is not None:
-            self._portfolio.cash = await self._portfolio_state_repo.get_cash()
+        start = time.perf_counter()
+        if self._repos.portfolio_state is not None:
+            self._portfolio.cash = await self._repos.portfolio_state.get_cash()
 
-        if self._position_repo is not None:
-            positions = await self._position_repo.get_all()
+        if self._repos.position is not None:
+            positions = await self._repos.position.get_all()
             self._portfolio.positions = positions
 
+        if self._repos.processing_cursor is not None:
+            self._last_processed_signal_id = await self._repos.processing_cursor.get_last_signal_id()
+
+        elapsed = time.perf_counter() - start
+        if self._metrics is not None:
+            self._metrics.rehydration_duration_seconds.observe(elapsed)
+        self._refresh_portfolio_metrics()
+
         LOGGER.info(
+            "Rehydrated portfolio %s",
             json.dumps(
                 {
-                    "event": "rehydrate",
                     "cash": float(self._portfolio.cash),
                     "positions": {s: float(q) for s, q in self._portfolio.positions.items()},
+                    "last_signal_id": str(self._last_processed_signal_id) if self._last_processed_signal_id else None,
+                    "duration_seconds": elapsed,
                 },
                 default=str,
-            )
+            ),
         )
 
-    async def persist_fill_state(self, fill: Fill) -> None:
-        """Persist position, cash, and equity snapshot after a fill.
+    @property
+    def last_processed_signal_id(self) -> uuid.UUID | None:
+        """Return the last processed signal id loaded during ``rehydrate``."""
+        return self._last_processed_signal_id
+
+    async def persist_fill_state(self, fill: Fill, signal_id: uuid.UUID | None = None) -> None:
+        """Persist position, cash, equity snapshot and processing cursor after a fill.
 
         Args:
             fill: The fill that was just applied to the portfolio.
+            signal_id: When provided and a cursor repo is wired, persisted as the
+                latest processed signal id so a restart can resume safely.
         """
-        if self._position_repo is not None:
+        if self._repos.position is not None:
             qty = self._portfolio.position_qty(fill.symbol)
-            await self._position_repo.upsert(fill.symbol, qty)
+            await self._repos.position.upsert(fill.symbol, qty)
 
-        if self._portfolio_state_repo is not None:
-            await self._portfolio_state_repo.save_cash(self._portfolio.cash)
+        if self._repos.portfolio_state is not None:
+            await self._repos.portfolio_state.save_cash(self._portfolio.cash)
 
-        if self._equity_snapshot_repo is not None:
+        if self._repos.equity_snapshot is not None:
             equity = self._portfolio.equity()
-            await self._equity_snapshot_repo.insert(equity, self._portfolio.cash)
+            await self._repos.equity_snapshot.insert(equity, self._portfolio.cash)
+
+        if signal_id is not None and self._repos.processing_cursor is not None:
+            await self._repos.processing_cursor.save_last_signal_id(signal_id)
+            self._last_processed_signal_id = signal_id
+
+    async def process_and_persist(self, signal: Signal) -> Fill | None:
+        """Process *signal* end-to-end and persist the trade durably.
+
+        When a ``trade_writer`` is wired, the order, fill, updated position,
+        cash balance, processing cursor and equity snapshot are written in a
+        single DB transaction that is idempotent on ``signal.uid``. When no
+        writer is wired, falls back to :meth:`persist_fill_state`. A signal
+        repository, when wired, is updated first so the signal is durably
+        recorded even when the trade is a no-op (duplicate or SELL with no
+        position).
+
+        Args:
+            signal: An approved trading signal.
+
+        Returns:
+            The :class:`Fill` produced by the paper executor, or ``None`` when
+            no order was created.
+
+        Raises:
+            Exception: Re-raises any persistence failure after reverting the
+                in-memory portfolio mutation so the in-memory state stays
+                consistent with the database.
+        """
+        if self._repos.signal is not None:
+            await self._repos.signal.save(signal)
+
+        order = create_order_from_signal(
+            signal,
+            self._portfolio,
+            self._order_factory_config,
+            self._deduplicator,
+        )
+        if order is None:
+            return None
+
+        last_price = self._portfolio.last_price(order.symbol)
+        assert last_price is not None  # guaranteed by create_order_from_signal
+        self._log_order_created(order, last_price)
+
+        fill = paper_execute(order, last_price, self._fee_model)
+        self._portfolio.apply_fill(fill)
+
+        try:
+            if self._repos.trade_writer is not None:
+                await self._repos.trade_writer.write_trade(
+                    order,
+                    fill,
+                    position_qty=self._portfolio.position_qty(fill.symbol),
+                    cash=self._portfolio.cash,
+                    equity=self._portfolio.equity(),
+                )
+                self._last_processed_signal_id = signal.uid
+            else:
+                await self.persist_fill_state(fill, signal_id=signal.uid)
+        except Exception:
+            self._portfolio.revert_fill(fill)
+            raise
+
+        if self._metrics is not None:
+            self._metrics.orders_created_total.labels(symbol=order.symbol, side=order.side.value).inc()
+            self._metrics.orders_filled_total.labels(symbol=order.symbol, side=order.side.value).inc()
+            self._metrics.fees_paid_total.labels(symbol=order.symbol).inc(float(fill.fee))
+        self._refresh_portfolio_metrics()
+        self._log_order_filled(order, fill)
+        return fill
+
+    def attach_repos(self, ctx: "PersistenceContext") -> None:
+        """Replace any unset repo in the bundle with the matching repo from *ctx*."""
+        self._repos = PaperTraderRepos(
+            signal=self._repos.signal or ctx.signal_repo,
+            position=self._repos.position or ctx.position_repo,
+            portfolio_state=self._repos.portfolio_state or ctx.portfolio_state_repo,
+            equity_snapshot=self._repos.equity_snapshot or ctx.equity_snapshot_repo,
+            processing_cursor=self._repos.processing_cursor or ctx.processing_cursor_repo,
+            trade_writer=self._repos.trade_writer or ctx.trade_writer,
+        )

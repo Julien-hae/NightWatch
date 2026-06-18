@@ -13,8 +13,8 @@ def _default_database_url() -> str | None:
     return os.environ.get("DATABASE_URL")
 
 
-def _normalise_dsn(url: str) -> str:
-    """Strip SQLAlchemy-style ``+driver`` qualifiers so asyncpg can parse the DSN."""
+def to_async_dsn(url: str) -> str:
+    """Return a DSN suitable for asyncpg (strips ``+asyncpg`` driver qualifiers)."""
     if url.startswith("postgresql+asyncpg://"):
         return "postgresql://" + url[len("postgresql+asyncpg://") :]
     if url.startswith("postgres+asyncpg://"):
@@ -25,30 +25,49 @@ def _normalise_dsn(url: str) -> str:
 class DatabaseConnector:
     """Thin Postgres connector exposing an async ``ping`` for health checks."""
 
-    def __init__(self, database_url: str | None = None, timeout: float = 2.0) -> None:
+    def __init__(
+        self,
+        database_url: str | None = None,
+        timeout: float = 2.0,
+        pool: asyncpg.Pool | None = None,
+    ) -> None:
         """Initialise the connector.
 
         Args:
             database_url: Postgres DSN. Falls back to the ``DATABASE_URL`` env var.
             timeout: Per-connection timeout (seconds) used when pinging.
+            pool: Optional pre-built asyncpg pool. When provided, ``ping`` reuses
+                it instead of opening a fresh connection per call.
         """
         self._database_url = database_url or _default_database_url()
         self._timeout = timeout
+        self._pool = pool
 
     @property
     def configured(self) -> bool:
-        """Return True when a DSN is available."""
-        return self._database_url is not None
+        """Return True when either a DSN or a pool is available."""
+        return self._pool is not None or self._database_url is not None
 
     async def ping(self) -> bool:
-        """Open a short-lived connection and run ``SELECT 1``.
+        """Run ``SELECT 1`` against Postgres.
+
+        Reuses the injected pool when available; otherwise opens a short-lived
+        connection from the DSN.
 
         Returns:
             True when the round-trip succeeds, False on any failure.
         """
+        if self._pool is not None:
+            try:
+                value = await self._pool.fetchval("SELECT 1", timeout=self._timeout)
+                return bool(value == 1)
+            except Exception as exc:  # noqa: BLE001
+                LOGGER.warning("Database pool ping failed: %s", exc)
+                return False
+
         if not self._database_url:
             return False
-        dsn = _normalise_dsn(self._database_url)
+        dsn = to_async_dsn(self._database_url)
         try:
             conn = await asyncpg.connect(dsn=dsn, timeout=self._timeout)
         except Exception as exc:  # noqa: BLE001

@@ -15,7 +15,6 @@ from typing import Any, Coroutine, TypeVar
 
 import asyncpg  # type: ignore[import-untyped]
 from alembic import command
-from alembic.config import Config
 from sqlalchemy import create_engine, text
 
 from Nightwatch.metrics import NightwatchMetrics
@@ -23,39 +22,18 @@ from Nightwatch.models.order_factory import OrderFactoryConfig
 from Nightwatch.models.paper_execution import PercentageFeeModel
 from Nightwatch.models.signal import Side
 from Nightwatch.paper_trader import PaperTrader
-from Nightwatch.pg_repositories import PgEquitySnapshotRepo, PgPortfolioStateRepo, PgPositionRepo
+from Nightwatch.pg_repositories import (
+    PgEquitySnapshotRepo,
+    PgPortfolioStateRepo,
+    PgPositionRepo,
+    PgProcessingCursorRepo,
+)
+from Nightwatch.repositories import PaperTraderRepos
+from tests.fixtures.db import RESET_DB_SQL, alembic_cfg, to_pg_dsn
 from tests.fixtures.portfolio_factory import make_portfolio
 from tests.fixtures.signal_factory import make_signal
 
 _T = TypeVar("_T")
-
-
-def _alembic_cfg(database_url: str) -> Config:
-    ini_path = os.path.join(os.path.dirname(__file__), "..", "..", "alembic.ini")
-    cfg = Config(os.path.abspath(ini_path))
-    cfg.set_main_option("sqlalchemy.url", database_url)
-    return cfg
-
-
-def _sync_url(url: str) -> str:
-    for prefix, replacement in (
-        ("postgresql+asyncpg://", "postgresql://"),
-        ("postgres+asyncpg://", "postgresql://"),
-    ):
-        if url.startswith(prefix):
-            return replacement + url[len(prefix) :]
-    return url
-
-
-def _asyncpg_url(url: str) -> str:
-    """Ensure the URL uses the plain postgresql:// scheme for asyncpg."""
-    for prefix, replacement in (
-        ("postgresql+asyncpg://", "postgresql://"),
-        ("postgres+asyncpg://", "postgresql://"),
-    ):
-        if url.startswith(prefix):
-            return replacement + url[len(prefix) :]
-    return url
 
 
 @unittest.skipUnless(os.environ.get("RUN_INTEGRATION"), "Integration tests require RUN_INTEGRATION=1")
@@ -71,20 +49,18 @@ class TestPaperTraderWithDatabase(unittest.TestCase):
         if not raw_url:
             raise unittest.SkipTest("DATABASE_URL is not set")
 
-        sync_url = _sync_url(raw_url)
+        sync_url = to_pg_dsn(raw_url)
         engine = create_engine(sync_url)
 
         # Fresh schema for this test run.
         with engine.connect() as conn:
-            conn.execute(
-                text("DROP TABLE IF EXISTS fills, orders, signals, positions, equity_snapshots, portfolio_state, alembic_version CASCADE")
-            )
+            conn.execute(text(RESET_DB_SQL))
             conn.commit()
 
-        command.upgrade(_alembic_cfg(sync_url), "head")
+        command.upgrade(alembic_cfg(sync_url), "head")
         engine.dispose()
 
-        cls.asyncpg_url = _asyncpg_url(raw_url)
+        cls.asyncpg_url = to_pg_dsn(raw_url)
         cls.pool = asyncio.get_event_loop().run_until_complete(asyncpg.create_pool(cls.asyncpg_url, min_size=1, max_size=3))
 
     @classmethod
@@ -111,9 +87,11 @@ class TestPaperTraderWithDatabase(unittest.TestCase):
             order_factory_config=OrderFactoryConfig(order_notional=Decimal("100")),
             fee_model=PercentageFeeModel(rate=Decimal("0.001")),
             metrics=metrics,
-            position_repo=position_repo,
-            portfolio_state_repo=portfolio_state_repo,
-            equity_snapshot_repo=equity_snapshot_repo,
+            repos=PaperTraderRepos(
+                position=position_repo,
+                portfolio_state=portfolio_state_repo,
+                equity_snapshot=equity_snapshot_repo,
+            ),
         )
 
         # Execute a BUY signal
@@ -149,8 +127,9 @@ class TestPaperTraderWithDatabase(unittest.TestCase):
         assert snapshot is not None
         snapshot_equity, snapshot_cash = snapshot
         self.assertEqual(snapshot_cash, expected_cash)
-        # Equity should equal cash (no open positions since we sold them all)
-        self.assertAlmostEqual(float(snapshot_equity), float(expected_cash), places=8)
+        # Equity = cash + mark-to-market of the open BTC/USD position.
+        expected_equity = expected_cash + expected_qty * Decimal("50000")
+        self.assertAlmostEqual(float(snapshot_equity), float(expected_equity), places=8)
 
     def test_multiple_fills_update_positions_and_cash(self) -> None:
         """Execute multiple trades and verify cumulative state is persisted correctly."""
@@ -162,8 +141,7 @@ class TestPaperTraderWithDatabase(unittest.TestCase):
             portfolio=portfolio,
             order_factory_config=OrderFactoryConfig(order_notional=Decimal("100")),
             fee_model=PercentageFeeModel(rate=Decimal("0.001")),
-            position_repo=position_repo,
-            portfolio_state_repo=portfolio_state_repo,
+            repos=PaperTraderRepos(position=position_repo, portfolio_state=portfolio_state_repo),
         )
 
         # First trade: BUY BTC
@@ -207,8 +185,7 @@ class TestPaperTraderWithDatabase(unittest.TestCase):
             portfolio=portfolio,
             order_factory_config=OrderFactoryConfig(order_notional=notional),
             fee_model=PercentageFeeModel(rate=fee_rate),
-            position_repo=position_repo,
-            portfolio_state_repo=portfolio_state_repo,
+            repos=PaperTraderRepos(position=position_repo, portfolio_state=portfolio_state_repo),
         )
         signal = make_signal(symbol="BTC/USD", side=Side.BUY)
         fill = trader.process_signal(signal)
@@ -225,10 +202,46 @@ class TestPaperTraderWithDatabase(unittest.TestCase):
             portfolio=fresh_portfolio,
             order_factory_config=OrderFactoryConfig(order_notional=notional),
             fee_model=PercentageFeeModel(rate=fee_rate),
-            position_repo=position_repo,
-            portfolio_state_repo=portfolio_state_repo,
+            repos=PaperTraderRepos(position=position_repo, portfolio_state=portfolio_state_repo),
         )
         self.run_async(rehydrated_trader.rehydrate())
 
         self.assertEqual(rehydrated_trader.portfolio.cash, expected_cash)
         self.assertEqual(rehydrated_trader.portfolio.position_qty("BTC/USD"), expected_qty)
+
+    def test_rehydrate_restores_last_processed_signal_id(self) -> None:
+        """persist_fill_state(signal_id) saves a cursor that rehydrate loads."""
+        cursor_repo = PgProcessingCursorRepo(self.pool)
+        position_repo = PgPositionRepo(self.pool)
+        portfolio_state_repo = PgPortfolioStateRepo(self.pool)
+
+        portfolio = make_portfolio(cash=Decimal("5000"), last_prices={"BTC/USD": Decimal("50000")})
+        trader = PaperTrader(
+            portfolio=portfolio,
+            order_factory_config=OrderFactoryConfig(order_notional=Decimal("100")),
+            fee_model=PercentageFeeModel(rate=Decimal("0.001")),
+            repos=PaperTraderRepos(
+                position=position_repo,
+                portfolio_state=portfolio_state_repo,
+                processing_cursor=cursor_repo,
+            ),
+        )
+
+        signal = make_signal(symbol="BTC/USD", side=Side.BUY)
+        fill = trader.process_signal(signal)
+        assert fill is not None
+        self.run_async(trader.persist_fill_state(fill, signal_id=signal.uid))
+
+        rehydrated = PaperTrader(
+            portfolio=make_portfolio(cash=Decimal("0")),
+            order_factory_config=OrderFactoryConfig(order_notional=Decimal("100")),
+            fee_model=PercentageFeeModel(rate=Decimal("0.001")),
+            repos=PaperTraderRepos(
+                position=position_repo,
+                portfolio_state=portfolio_state_repo,
+                processing_cursor=cursor_repo,
+            ),
+        )
+        self.run_async(rehydrated.rehydrate())
+
+        self.assertEqual(rehydrated.last_processed_signal_id, signal.uid)

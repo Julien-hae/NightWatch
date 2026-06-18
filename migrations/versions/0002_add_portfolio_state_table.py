@@ -18,12 +18,18 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Add portfolio_state table."""
+    """Add portfolio_state singleton table.
+
+    The CHECK constraint ``id = 1`` enforces a single-row table so the bot
+    always has exactly one current cash balance.
+    """
     op.create_table(
         "portfolio_state",
+        sa.Column("id", sa.SmallInteger(), nullable=False),
         sa.Column("cash", sa.Numeric(precision=20, scale=8), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.UniqueConstraint("cash", name="uq_portfolio_state_single_row"),
+        sa.PrimaryKeyConstraint("id", name="pk_portfolio_state"),
+        sa.CheckConstraint("id = 1", name="ck_portfolio_state_singleton"),
     )
 
 

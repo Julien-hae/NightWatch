@@ -38,7 +38,21 @@ class StrategyRunner:
         self._was_killed: bool = False
 
     def on_market_tick(self, tick: MarketTick) -> Signal | None:
-        """Process a market tick and determine if a trading signal should be emitted. Return None if Kill switch is active."""
+        """Process *tick* synchronously; route approved signals through the paper trader."""
+        signal = self._evaluate_tick(tick)
+        if signal is not None and self._paper_trader is not None:
+            self._paper_trader.process_signal(signal)
+        return signal
+
+    async def on_market_tick_async(self, tick: MarketTick) -> Signal | None:
+        """Async variant: route approved signals through ``process_and_persist`` for durable writes."""
+        signal = self._evaluate_tick(tick)
+        if signal is not None and self._paper_trader is not None:
+            await self._paper_trader.process_and_persist(signal)
+        return signal
+
+    def _evaluate_tick(self, tick: MarketTick) -> Signal | None:
+        """Buffer the tick and return an approved signal, or ``None`` when suppressed."""
         first_tick = self._buffer.get_first_tick(tick.symbol)
         self._buffer.add_tick(tick)
         if self._paper_trader is not None:
@@ -76,19 +90,21 @@ class StrategyRunner:
                 risk_decision.reason,
             )
             return None
-        log = {
-            "event": "signal",
-            "signal_id": str(signal.uid),
-            "symbol": tick.symbol,
-            "side": signal.side.value,
-            "strategy": signal.strategy,
-            "delta_pct": signal.rationale.get("delta_pct", None),
-            "window_sec": signal.rationale.get("window_sec", None),
-            "threshold_pct": signal.rationale.get("threshold_pct", None),
-        }
-        LOGGER.info(json.dumps(log, default=str))
-        if self._paper_trader is not None:
-            self._paper_trader.process_signal(signal)
+        LOGGER.info(
+            json.dumps(
+                {
+                    "event": "signal",
+                    "signal_id": str(signal.uid),
+                    "symbol": tick.symbol,
+                    "side": signal.side.value,
+                    "strategy": signal.strategy,
+                    "delta_pct": signal.rationale.get("delta_pct", None),
+                    "window_sec": signal.rationale.get("window_sec", None),
+                    "threshold_pct": signal.rationale.get("threshold_pct", None),
+                },
+                default=str,
+            )
+        )
         return signal
 
     def _is_suppressed_by_kill_switch(self, tick: MarketTick) -> bool:

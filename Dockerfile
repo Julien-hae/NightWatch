@@ -18,10 +18,12 @@ RUN apt-get update \
 
 COPY pyproject.toml poetry.lock README.md ./
 COPY src ./src
+COPY alembic.ini ./
+COPY migrations ./migrations
 
 RUN poetry install --only main --no-root \
     && poetry install --only main
 
 EXPOSE 8000
 
-CMD ["python", "-m", "uvicorn", "Nightwatch.api:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "Nightwatch.main"]
