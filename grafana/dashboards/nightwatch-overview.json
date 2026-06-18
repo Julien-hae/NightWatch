@@ -60,6 +60,21 @@
         {"refId": "A", "expr": "sum(rate(signals_total[5m]))", "legendFormat": "accepted/s"},
         {"refId": "B", "expr": "sum(rate(signals_rejected_total[5m]))", "legendFormat": "rejected/s"}
       ]
+    },
+    {
+      "id": 5,
+      "type": "logs",
+      "title": "Logs",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+      "datasource": "Loki",
+      "targets": [
+        {"refId": "A", "expr": "{service=~\"trade-.+\"}"}
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "enableLogDetails": true
+      }
     }
   ],
   "annotations": {
