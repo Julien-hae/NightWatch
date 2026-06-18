@@ -39,11 +39,38 @@ services:
         condition: service_started
     environment:
       LOG_LEVEL: INFO
+      LOG_FORMAT: json
       NATS_SERVERS: nats://nats:4222
       DATABASE_URL: postgresql+asyncpg://trade:tradepass@trade-db:5432/trade
       HEALTH_REQUIRE_WS: "0"
     ports:
       - "8000:8000"
+
+  loki:
+    image: grafana/loki:3.1.0
+    container_name: trade-loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3100/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  promtail:
+    image: grafana/promtail:3.1.0
+    container_name: trade-promtail
+    restart: unless-stopped
+    depends_on:
+      loki:
+        condition: service_healthy
+    volumes:
+      - ./promtail.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/config.yml
 
   prometheus:
     image: prom/prometheus:latest
@@ -61,6 +88,8 @@ services:
     depends_on:
       prometheus:
         condition: service_started
+      loki:
+        condition: service_healthy
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin

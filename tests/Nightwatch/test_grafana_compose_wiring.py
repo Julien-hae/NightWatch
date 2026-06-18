@@ -10,6 +10,7 @@ DASHBOARD_PROVIDER_PATH = ROOT / "grafana" / "provisioning" / "dashboards" / "da
 DASHBOARD_JSON_PATH = ROOT / "grafana" / "dashboards" / "nightwatch-overview.json"
 BOT_HEALTH_JSON_PATH = ROOT / "grafana" / "dashboards" / "bot_health.json"
 TRADING_JSON_PATH = ROOT / "grafana" / "dashboards" / "trading.json"
+PROMTAIL_PATH = ROOT / "promtail.yml"
 
 
 class TestGrafanaComposeWiring(unittest.TestCase):
@@ -74,6 +75,66 @@ class TestGrafanaComposeWiring(unittest.TestCase):
         self.assertIn("cash_balance", dashboard_text)
         self.assertIn("equity", dashboard_text)
         self.assertIn("rate(fees_paid_total[5m])", dashboard_text)
+
+
+class TestLokiComposeWiring(unittest.TestCase):
+    """Ensure Loki and Promtail are wired for centralized log shipping."""
+
+    def test_compose_includes_loki_service(self) -> None:
+        compose_text = COMPOSE_PATH.read_text()
+
+        self.assertIn("  loki:\n", compose_text)
+        self.assertIn("    image: grafana/loki:3.1.0\n", compose_text)
+        self.assertIn('      - "3100:3100"\n', compose_text)
+        self.assertIn("/etc/loki/local-config.yaml", compose_text)
+        self.assertIn("/ready", compose_text)
+
+    def test_compose_includes_promtail_service(self) -> None:
+        compose_text = COMPOSE_PATH.read_text()
+
+        self.assertIn("  promtail:\n", compose_text)
+        self.assertIn("    image: grafana/promtail:3.1.0\n", compose_text)
+        self.assertIn("/var/lib/docker/containers", compose_text)
+        self.assertIn("/var/run/docker.sock", compose_text)
+
+    def test_promtail_config_exists_and_ships_to_loki(self) -> None:
+        self.assertTrue(PROMTAIL_PATH.exists(), msg="Promtail config file is missing")
+        promtail_text = PROMTAIL_PATH.read_text()
+
+        self.assertIn("http://loki:3100/loki/api/v1/push", promtail_text)
+        self.assertIn("docker_sd_configs", promtail_text)
+        self.assertIn("unix:///var/run/docker.sock", promtail_text)
+
+    def test_grafana_depends_on_loki(self) -> None:
+        compose_text = COMPOSE_PATH.read_text()
+
+        # Grafana depends_on section should reference loki
+        grafana_idx = compose_text.index("  grafana:")
+        depends_idx = compose_text.index("    depends_on:", grafana_idx)
+        # Look at the depends_on block (up to next top-level key)
+        depends_block = compose_text[depends_idx : depends_idx + 200]
+        self.assertIn("loki:", depends_block)
+
+    def test_datasource_file_defines_loki_datasource(self) -> None:
+        datasource_text = DATASOURCE_PATH.read_text()
+
+        self.assertIn("name: Loki", datasource_text)
+        self.assertIn("type: loki", datasource_text)
+        self.assertIn("url: http://loki:3100", datasource_text)
+
+    def test_overview_dashboard_has_logs_panel(self) -> None:
+        dashboard_text = DASHBOARD_JSON_PATH.read_text()
+
+        self.assertIn('"type": "logs"', dashboard_text)
+        self.assertIn('"title": "Logs"', dashboard_text)
+        self.assertIn('"datasource": "Loki"', dashboard_text)
+        self.assertIn("trade-.+", dashboard_text)
+
+    def test_trade_service_emits_json_logs(self) -> None:
+        compose_text = COMPOSE_PATH.read_text()
+
+        # trade-service should have LOG_FORMAT: json
+        self.assertIn("LOG_FORMAT: json", compose_text)
 
 
 if __name__ == "__main__":
