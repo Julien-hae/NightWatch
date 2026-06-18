@@ -8,6 +8,7 @@ COMPOSE_PATH = ROOT / "docker-compose.yml"
 DATASOURCE_PATH = ROOT / "grafana" / "provisioning" / "datasources" / "datasource.yml"
 DASHBOARD_PROVIDER_PATH = ROOT / "grafana" / "provisioning" / "dashboards" / "dashboards.yml"
 DASHBOARD_JSON_PATH = ROOT / "grafana" / "provisioning" / "dashboards" / "nightwatch-overview.json"
+BOT_HEALTH_JSON_PATH = ROOT / "grafana" / "provisioning" / "dashboards" / "bot_health.json"
 
 
 class TestGrafanaComposeWiring(unittest.TestCase):
@@ -46,6 +47,17 @@ class TestGrafanaComposeWiring(unittest.TestCase):
         self.assertTrue(DASHBOARD_JSON_PATH.exists(), msg="Grafana dashboard JSON is missing")
         dashboard_text = DASHBOARD_JSON_PATH.read_text()
         self.assertIn('"title": "NightWatch Overview"', dashboard_text)
+
+    def test_bot_health_dashboard_exists_with_expected_panels(self) -> None:
+        self.assertTrue(BOT_HEALTH_JSON_PATH.exists(), msg="Bot Health dashboard JSON is missing")
+        dashboard_text = BOT_HEALTH_JSON_PATH.read_text()
+
+        self.assertIn('"title": "Bot Health"', dashboard_text)
+        self.assertIn('"title": "Ticks/sec by Symbol"', dashboard_text)
+        self.assertIn("rate(ticks_received_total[1m])", dashboard_text)
+        self.assertIn("ws_reconnects_total", dashboard_text)
+        self.assertIn("parse_errors_total", dashboard_text)
+        self.assertIn('up{job=\\"trade-service\\"}', dashboard_text)
 
 
 if __name__ == "__main__":
