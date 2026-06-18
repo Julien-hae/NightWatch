@@ -140,13 +140,15 @@ The following environment variables may be used to configure  `Nightwatch`:
 ## Running with Docker Compose
 
 A `docker-compose.yml` is provided to run the `trade-service` together
-with its dependencies (Postgres and NATS) locally or on a VPS:
+with its dependencies (Postgres, NATS, Prometheus, and Grafana) locally or on a VPS:
 
 | Service | Image | Purpose |
 |---------|-------|---------|
 | `trade-db` | `postgres:16-alpine` | Persistent Postgres instance (DB `trade`, user `trade`, password `tradepass`). |
 | `nats` | `nats:2.10-alpine` | NATS broker with JetStream enabled. |
 | `trade-service` | built from local `Dockerfile` | FastAPI app exposing `/healthz` and `/metrics` on port `8000`. |
+| `prometheus` | `prom/prometheus:latest` | Scrapes `trade-service` metrics and exposes Prometheus UI on port `9090`. |
+| `grafana` | `grafana/grafana:11.1.4` | Dashboard UI on port `3000`, auto-provisioned with a default `Prometheus` datasource. |
 
 Spin everything up:
 
@@ -171,3 +173,9 @@ on every request when a `DatabaseConnector` is injected, so
 `db_connected` reflects the **current** reachability of `trade-db`. The
 endpoint returns `200` when every connection is healthy and `503`
 otherwise.
+
+Grafana is provisioned from `grafana/provisioning/datasources/datasource.yml`.
+After startup, sign in at `http://localhost:3000` (default `admin` / `admin`) and the
+`Prometheus` datasource is already configured to `http://prometheus:9090`.
+The default dashboard `NightWatch Overview` is auto-loaded from
+`grafana/provisioning/dashboards/nightwatch-overview.json`.

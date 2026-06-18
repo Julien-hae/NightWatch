@@ -1,0 +1,78 @@
+{
+  "id": null,
+  "uid": "nightwatch-overview",
+  "title": "NightWatch Overview",
+  "tags": ["nightwatch", "trading"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Equity",
+      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0},
+      "datasource": "Prometheus",
+      "targets": [
+        {"refId": "A", "expr": "equity"}
+      ],
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Ticks Received / Published",
+      "gridPos": {"h": 8, "w": 18, "x": 6, "y": 0},
+      "datasource": "Prometheus",
+      "targets": [
+        {"refId": "A", "expr": "sum(rate(ticks_received_total[1m]))", "legendFormat": "received/s"},
+        {"refId": "B", "expr": "sum(rate(ticks_published_total[1m]))", "legendFormat": "published/s"}
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Orders Created / Filled",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+      "datasource": "Prometheus",
+      "targets": [
+        {"refId": "A", "expr": "sum(rate(orders_created_total[5m]))", "legendFormat": "created/s"},
+        {"refId": "B", "expr": "sum(rate(orders_filled_total[5m]))", "legendFormat": "filled/s"}
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Signals Accepted vs Rejected",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {"refId": "A", "expr": "sum(rate(signals_total[5m]))", "legendFormat": "accepted/s"},
+        {"refId": "B", "expr": "sum(rate(signals_rejected_total[5m]))", "legendFormat": "rejected/s"}
+      ]
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  }
+}
