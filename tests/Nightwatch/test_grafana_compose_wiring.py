@@ -7,8 +7,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 COMPOSE_PATH = ROOT / "docker-compose.yml"
 DATASOURCE_PATH = ROOT / "grafana" / "provisioning" / "datasources" / "datasource.yml"
 DASHBOARD_PROVIDER_PATH = ROOT / "grafana" / "provisioning" / "dashboards" / "dashboards.yml"
-DASHBOARD_JSON_PATH = ROOT / "grafana" / "provisioning" / "dashboards" / "nightwatch-overview.json"
-BOT_HEALTH_JSON_PATH = ROOT / "grafana" / "provisioning" / "dashboards" / "bot_health.json"
+DASHBOARD_JSON_PATH = ROOT / "grafana" / "dashboards" / "nightwatch-overview.json"
+BOT_HEALTH_JSON_PATH = ROOT / "grafana" / "dashboards" / "bot_health.json"
+TRADING_JSON_PATH = ROOT / "grafana" / "dashboards" / "trading.json"
 
 
 class TestGrafanaComposeWiring(unittest.TestCase):
@@ -37,12 +38,13 @@ class TestGrafanaComposeWiring(unittest.TestCase):
     def test_dashboard_provisioning_files_exist_and_match_compose_mount(self) -> None:
         compose_text = COMPOSE_PATH.read_text()
         self.assertIn("./grafana/provisioning:/etc/grafana/provisioning:ro", compose_text)
+        self.assertIn("./grafana/dashboards:/var/lib/grafana/dashboards:ro", compose_text)
 
         self.assertTrue(DASHBOARD_PROVIDER_PATH.exists(), msg="Grafana dashboard provider file is missing")
         provider_text = DASHBOARD_PROVIDER_PATH.read_text()
         self.assertIn("apiVersion: 1", provider_text)
         self.assertIn("type: file", provider_text)
-        self.assertIn("path: /etc/grafana/provisioning/dashboards", provider_text)
+        self.assertIn("path: /var/lib/grafana/dashboards", provider_text)
 
         self.assertTrue(DASHBOARD_JSON_PATH.exists(), msg="Grafana dashboard JSON is missing")
         dashboard_text = DASHBOARD_JSON_PATH.read_text()
@@ -58,6 +60,20 @@ class TestGrafanaComposeWiring(unittest.TestCase):
         self.assertIn("ws_reconnects_total", dashboard_text)
         self.assertIn("parse_errors_total", dashboard_text)
         self.assertIn('up{job=\\"trade-service\\"}', dashboard_text)
+
+    def test_trading_dashboard_exists_with_expected_panels(self) -> None:
+        self.assertTrue(TRADING_JSON_PATH.exists(), msg="Trading dashboard JSON is missing")
+        dashboard_text = TRADING_JSON_PATH.read_text()
+
+        self.assertIn('"title": "Trading"', dashboard_text)
+        self.assertIn('"title": "Signals/sec (BUY vs SELL)"', dashboard_text)
+        self.assertIn("rate(signals_total[1m])", dashboard_text)
+        self.assertIn("rate(signals_rejected_total[1m])", dashboard_text)
+        self.assertIn("rate(orders_filled_total[1m])", dashboard_text)
+        self.assertIn("position_qty", dashboard_text)
+        self.assertIn("cash_balance", dashboard_text)
+        self.assertIn("equity", dashboard_text)
+        self.assertIn("rate(fees_paid_total[5m])", dashboard_text)
 
 
 if __name__ == "__main__":
