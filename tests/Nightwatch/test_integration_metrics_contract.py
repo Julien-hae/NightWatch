@@ -6,7 +6,7 @@ import unittest
 from fastapi.testclient import TestClient
 
 from Nightwatch.api import create_app
-from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.metrics.metrics import NightwatchMetrics
 
 
 class TestMetricsContractIntegration(unittest.TestCase):

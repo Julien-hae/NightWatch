@@ -1,6 +1,6 @@
 """Risk Engine module for Nightwatch."""
 
-from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.metrics.metrics import NightwatchMetrics
 from Nightwatch.models.risk_decision import RiskDecision
 from Nightwatch.models.signal import Signal
 from Nightwatch.rules.cooldown_rule import CooldownRule

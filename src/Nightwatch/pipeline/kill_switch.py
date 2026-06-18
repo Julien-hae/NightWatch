@@ -2,7 +2,7 @@
 
 import logging
 
-from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.metrics.metrics import NightwatchMetrics
 from Nightwatch.models.bot_control_event import BotControlEvent
 
 LOGGER = logging.getLogger(__name__)

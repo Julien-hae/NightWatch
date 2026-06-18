@@ -13,7 +13,7 @@ from typing import Any
 from Nightwatch.adapters.kraken_adapter import KrakenAdapter
 from Nightwatch.messaging.publisher import MarketTickPublisher
 from Nightwatch.messaging.subscriber import MarketTickSubscriber
-from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.metrics.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.nats_config import NatsConnectionConfig
 from Nightwatch.models.tick_buffer import TickBuffer

@@ -14,7 +14,7 @@ from pydantic import ValidationError
 
 from Nightwatch.messaging.control_event_publisher import CONTROL_STREAM_NAME, CONTROL_SUBJECT
 from Nightwatch.messaging.nats_connection import NatsConnector
-from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.metrics.metrics import NightwatchMetrics
 from Nightwatch.models.bot_control_event import BotControlEvent
 from Nightwatch.models.nats_config import NatsConnectionConfig
 from Nightwatch.pipeline.kill_switch import KillSwitch

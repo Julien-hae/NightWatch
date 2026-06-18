@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from Nightwatch.db.repositories import PaperTraderRepos
-from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.metrics.metrics import NightwatchMetrics
 from Nightwatch.models.fill import Fill
 from Nightwatch.models.order import Order
 from Nightwatch.models.order_factory import OrderFactoryConfig, SignalDeduplicator, create_order_from_signal

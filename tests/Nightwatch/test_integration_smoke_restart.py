@@ -19,7 +19,7 @@ from sqlalchemy import create_engine, text
 
 from Nightwatch.db.bootstrap import bootstrap_persistence
 from Nightwatch.db.repositories import PaperTraderRepos
-from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.metrics.metrics import NightwatchMetrics
 from Nightwatch.models.order_factory import OrderFactoryConfig
 from Nightwatch.models.paper_execution import PercentageFeeModel
 from Nightwatch.models.portfolio import Portfolio

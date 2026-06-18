@@ -11,7 +11,7 @@ from prometheus_client import CollectorRegistry
 
 from Nightwatch.messaging.publisher import MarketTickPublisher
 from Nightwatch.messaging.subscriber import MarketTickSubscriber
-from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.metrics.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.nats_config import NatsConnectionConfig
 from tests.fixtures.nats_server import NatsServerFixture
@@ -157,7 +157,7 @@ class TestMarketTickSubscriber(unittest.TestCase):
                 nonlocal bad_tick
                 bad_tick = t
 
-            await self.subscriber.subscribe("market.tick.BTCUSD", on_bad_tick)
+            await self.subscriber.subscribe("market.tick.BTCUSD", on_bad_tick)  # type: ignore[arg-type]
             await self.publisher.client.publish("market.tick.BTCUSD", bad_tick)
             await asyncio.sleep(0.1)
             self.assertTrue(self.subscriber.client.is_connected)

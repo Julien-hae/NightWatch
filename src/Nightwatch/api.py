@@ -10,7 +10,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from Nightwatch.db.bootstrap import PersistenceContext, bootstrap_persistence
 from Nightwatch.db.database import DatabaseConnector
 from Nightwatch.messaging.nats_connection import NatsConnector
-from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.metrics.metrics import NightwatchMetrics
 from Nightwatch.models.service_health import ServiceHealth
 from Nightwatch.pipeline.paper_trader import PaperTrader
 

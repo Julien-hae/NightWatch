@@ -23,7 +23,7 @@ from Nightwatch.db.pg_repositories import (
     PgProcessingCursorRepo,
     PgSignalRepo,
 )
-from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.metrics.metrics import NightwatchMetrics
 
 LOGGER = logging.getLogger(__name__)
 

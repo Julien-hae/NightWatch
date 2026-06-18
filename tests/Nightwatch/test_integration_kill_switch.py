@@ -14,7 +14,7 @@ from Nightwatch.messaging.control_event_publisher import ControlEventPublisher
 from Nightwatch.messaging.control_event_subscriber import ControlEventSubscriber
 from Nightwatch.messaging.publisher import MarketTickPublisher
 from Nightwatch.messaging.subscriber import MarketTickSubscriber
-from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.metrics.metrics import NightwatchMetrics
 from Nightwatch.models.bot_control_event import BotControlEvent
 from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.nats_config import NatsConnectionConfig

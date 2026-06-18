@@ -13,7 +13,7 @@ from prometheus_client import CollectorRegistry
 
 from Nightwatch.messaging.control_event_publisher import CONTROL_STREAM_NAME, ControlEventPublisher
 from Nightwatch.messaging.control_event_subscriber import ControlEventSubscriber
-from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.metrics.metrics import NightwatchMetrics
 from Nightwatch.models.bot_control_event import BotControlEvent
 from Nightwatch.models.nats_config import NatsConnectionConfig
 from tests.fixtures.nats_server import NatsServerFixture

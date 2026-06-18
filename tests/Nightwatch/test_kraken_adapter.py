@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, patch
 from prometheus_client import CollectorRegistry
 
 from Nightwatch.adapters.kraken_adapter import KrakenAdapter
-from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.metrics.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
 
 

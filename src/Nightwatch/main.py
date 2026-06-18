@@ -32,7 +32,7 @@ from Nightwatch.db.database import DatabaseConnector
 from Nightwatch.db.repositories import PaperTraderRepos
 from Nightwatch.messaging.control_event_subscriber import ControlEventSubscriber
 from Nightwatch.messaging.nats_connection import NatsConnector
-from Nightwatch.metrics import NightwatchMetrics
+from Nightwatch.metrics.metrics import NightwatchMetrics
 from Nightwatch.models.bot_control_event import BotControlEvent
 from Nightwatch.models.nats_config import NatsConnectionConfig
 from Nightwatch.models.order_factory import OrderFactoryConfig
