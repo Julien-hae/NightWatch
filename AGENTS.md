@@ -87,7 +87,8 @@ src/Nightwatch/
                                      in order, skipping unparsable lines (read-side counterpart to tick_recorder.py)
   cli/
     replay.py                       `poetry run replay --file <path> --speed fast|real` — reads a tick file and
-                                     logs a summary; publishing (speed-controlled) not implemented yet
+                                     republishes each tick to NATS on market.tick.<SYMBOL>; fast=no delay,
+                                     real=sleeps based on recorded timestamp deltas; logs a summary at the end
   common/
     logging_configuration.py        UTC text formatter + JSON formatter (LOG_FORMAT=json, for Loki)
     utils.py                        normalize_symbol() for NATS-safe subjects
