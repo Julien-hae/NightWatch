@@ -29,7 +29,7 @@ import uvicorn
 from Nightwatch.adapters.kraken_adapter import KrakenAdapter
 from Nightwatch.api import create_app
 from Nightwatch.common.logging_configuration import configure_logger
-from Nightwatch.db.bootstrap import bootstrap_persistence
+from Nightwatch.db.bootstrap import PersistenceContext, bootstrap_persistence
 from Nightwatch.db.database import DatabaseConnector
 from Nightwatch.db.repositories import PaperTraderRepos
 from Nightwatch.messaging.control_event_subscriber import ControlEventSubscriber
@@ -50,6 +50,8 @@ from Nightwatch.pipeline.strategy_runner import StrategyRunner
 from Nightwatch.strategies.momentum_burst import MomentumBurstStrategy
 
 LOGGER = logging.getLogger(__name__)
+
+_INGEST_SHUTDOWN_GRACE_SEC = 5.0
 
 
 @dataclass(frozen=True)
@@ -158,8 +160,15 @@ async def _ingest_ticks(
     runner: StrategyRunner,
     health: ServiceHealth,
     tick_publisher: MarketTickPublisher | None,
+    stop_event: asyncio.Event,
 ) -> None:
-    """Stream ticks from Kraken, best-effort publish them, then run them through the pipeline."""
+    """Stream ticks from Kraken, best-effort publish them, then run them through the pipeline.
+
+    Checks *stop_event* only after a tick has fully finished the pipeline (publish -> strategy ->
+    risk -> paper-trade -> atomic DB write), never mid-processing, so a shutdown signal can never
+    interrupt an in-flight trade write. See ``_run``'s shutdown sequence for the bounded wait that
+    gives this loop a chance to reach that checkpoint before falling back to a hard cancel.
+    """
     async for tick in kraken.stream_ticks():
         health.ws_connected = True
         if tick_publisher is not None:
@@ -174,6 +183,38 @@ async def _ingest_ticks(
             await runner.on_market_tick_async(tick)
         except Exception as exc:  # noqa: BLE001
             LOGGER.exception("Tick processing failed for %s: %s", tick.symbol, exc)
+        if stop_event.is_set():
+            LOGGER.info("Stop requested; finished in-flight tick, exiting ingest loop.")
+            break
+
+
+async def _shutdown_resources(
+    *,
+    control_sub: ControlEventSubscriber | None,
+    tick_publisher: MarketTickPublisher | None,
+    nats_connector: NatsConnector | None,
+    kraken: KrakenAdapter,
+    persistence: PersistenceContext,
+) -> None:
+    """Drain NATS connections, close the Kraken WebSocket, then close the DB pool.
+
+    ``NatsConnector.close()`` calls ``drain()`` (not a bare disconnect), which stops accepting new
+    work and flushes in-flight publishes/subscriptions before the connection closes;
+    ``persistence.close()`` closes the asyncpg pool, which waits for connections to finish their
+    current query. Order matters: NATS first so no new control/tick traffic arrives while the DB
+    is going away, then the DB.
+    """
+    LOGGER.info("Draining NATS connections...")
+    if control_sub is not None:
+        await _safe_close("Control subscriber", control_sub.close())
+    if tick_publisher is not None:
+        await _safe_close("Tick publisher", tick_publisher.close())
+    if nats_connector is not None and nats_connector.client.is_connected:
+        await _safe_close("NATS", nats_connector.close())
+    await _safe_close("Kraken", kraken.close())
+    LOGGER.info("Closing database connections...")
+    await persistence.close()
+    LOGGER.info("Shutdown complete")
 
 
 def _install_signal_handlers(stop_event: asyncio.Event, server: uvicorn.Server) -> None:
@@ -246,7 +287,7 @@ async def _run() -> None:
     stop_event = asyncio.Event()
     _install_signal_handlers(stop_event, server)
 
-    ingest_task = asyncio.create_task(_ingest_ticks(kraken, runner, health, tick_publisher), name="kraken-ingest")
+    ingest_task = asyncio.create_task(_ingest_ticks(kraken, runner, health, tick_publisher, stop_event), name="kraken-ingest")
     server_task = asyncio.create_task(server.serve(), name="uvicorn-server")
     stop_task = asyncio.create_task(stop_event.wait(), name="stop-event")
 
@@ -258,20 +299,25 @@ async def _run() -> None:
                 LOGGER.error("Task %s exited with: %s", task.get_name(), exc)
     finally:
         server.should_exit = True
-        for task in (ingest_task, stop_task):
-            if not task.done():
-                task.cancel()
+        stop_event.set()
+        if not stop_task.done():
+            stop_task.cancel()
+        if not ingest_task.done():
+            # Bounded wait for the in-flight tick (if any) to finish its DB write before we give
+            # up and cancel — see _ingest_ticks' stop_event checkpoint.
+            _, pending = await asyncio.wait({ingest_task}, timeout=_INGEST_SHUTDOWN_GRACE_SEC)
+            if pending:
+                LOGGER.warning("Ingest task did not stop within %.0fs; cancelling.", _INGEST_SHUTDOWN_GRACE_SEC)
+                ingest_task.cancel()
         await asyncio.gather(ingest_task, server_task, stop_task, return_exceptions=True)
 
-        if control_sub is not None:
-            await _safe_close("Control subscriber", control_sub.close())
-        if tick_publisher is not None:
-            await _safe_close("Tick publisher", tick_publisher.close())
-        if nats_connector is not None and nats_connector.client.is_connected:
-            await _safe_close("NATS", nats_connector.close())
-        await _safe_close("Kraken", kraken.close())
-        await persistence.close()
-        LOGGER.info("Shutdown complete")
+        await _shutdown_resources(
+            control_sub=control_sub,
+            tick_publisher=tick_publisher,
+            nats_connector=nats_connector,
+            kraken=kraken,
+            persistence=persistence,
+        )
 
 
 def main() -> None:

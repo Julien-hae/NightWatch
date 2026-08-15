@@ -30,9 +30,6 @@ class MarketTickSubscriber(NatsConnector):
     ) -> None:
         """Subscribe to a subject, calling cb with each received MarketTick."""
         if self.client.is_closed:
-            # Don't call connect() while the client is RECONNECTING — nats.py already
-            # resubscribes automatically once the connection is restored, and racing its
-            # own reconnect loop with a manual connect() call can hang indefinitely.
             LOGGER.warning("NATS subscriber is not connected. Calling connect(),")
             await self.connect()
         if self._subscription is not None:
