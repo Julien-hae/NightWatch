@@ -26,10 +26,6 @@ class MarketTickPublisher(NatsConnector):
     async def publish(self, tick: MarketTick, *, flush: bool = True) -> str:
         """Publish a MarketTick to the appropriate subject. Returns the subject used."""
         if self.client.is_closed:
-            # Only reconnect explicitly when the client was never connected or has fully
-            # closed. While the client is RECONNECTING, nats.py already buffers publishes
-            # and replays them once the connection is restored — calling connect() again
-            # here would race the client's own reconnect loop and can hang indefinitely.
             LOGGER.warning("NATS publisher is not connected. Calling connect(),")
             await self.connect()
 
