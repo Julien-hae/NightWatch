@@ -23,7 +23,9 @@ class NatsConnectionConfig(BaseModel):
     Supported env vars:
         NATS_SERVERS       – comma-separated list of NATS URLs (e.g. "tls://host:4222")
         NATS_TOKEN         – authentication token
-        NATS_NKEY_SEED     – NKey seed string
+
+    NKey auth is not implemented yet — the ``nkeys_seed`` field below is commented
+    out as a placeholder; do not document ``NATS_NKEY_SEED`` as supported until it is.
     """
 
     servers: list[str] = Field(default_factory=_default_servers)
@@ -33,6 +35,6 @@ class NatsConnectionConfig(BaseModel):
     ping_interval: int = 10
     max_outstanding_pings: int = 2
     token: str | None = Field(default_factory=lambda: os.environ.get("NATS_TOKEN", None))
-    # nkeys_seed: str | None = Field(default_factory=lambda: os.environ.get("NATS_NKEY_SEED"))
+    # nkeys_seed: str | None = Field(default_factory=lambda: os.environ.get("NATS_NKEY_SEED"))  # not yet implemented
 
     model_config = ConfigDict(str_max_length=255)

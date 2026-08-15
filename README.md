@@ -36,7 +36,20 @@ graph LR
 
 ## Getting Started
 
-TODO
+Fastest path to a running bot — everything containerized, nothing to install locally:
+
+```bash
+docker compose up --build
+curl -s http://localhost:8000/healthz | jq
+```
+
+This starts Postgres, NATS, the bot itself (`trade-service`), and the full
+observability stack. Grafana: `localhost:3000` (admin/admin). Prometheus:
+`localhost:9090`. See *Running with Docker Compose* below for the full service list
+and health-check details.
+
+For local development (editing code, running tests/linting without Docker), see
+*Setup* below. For the bot's internal architecture and conventions, see `AGENTS.md`.
 
 ## Setup
 ### Install WSL
@@ -76,16 +89,21 @@ Do not forget to activate your virtualenv when done with the makefile
 
 The metrics below are a compatibility contract for dashboards and alerts.
 Metric names and label keys are considered stable and MUST NOT change without
-an explicit migration plan.
+an explicit migration plan. All of them are exposed together on the single
+`trade-service` process's `/metrics` endpoint — the "ingestion" / "trading" split
+below is a logical grouping, not two separate running services (see `AGENTS.md` for
+the full architecture).
 
-### market-service MUST expose
+### Ingestion
 
 - `ticks_received_total{symbol}` (counter): total ticks received from the exchange per symbol
-- `ticks_published_total{symbol}` (counter): total ticks published to NATS per symbol
+- `ticks_published_total{symbol}` (counter): total ticks best-effort published to NATS core
+  (subject `market.tick.<SYMBOL>`) per symbol, for any interested external subscriber. A publish
+  failure never blocks trading — see `AGENTS.md` for the ingest pipeline.
 - `ws_reconnects_total` (counter): total websocket reconnect attempts
 - `parse_errors_total` (counter): total ticker message parse failures
 
-### trade-service MUST expose
+### Trading
 
 - `signals_total{symbol,side,strategy}` (counter): total strategy-emitted signals
 - `signals_rejected_total{symbol,reason}` (counter): total signals rejected by risk checks
@@ -95,15 +113,6 @@ an explicit migration plan.
 - `cash_balance` (gauge): current quote-currency cash balance
 - `equity` (gauge): current total equity (cash + position value)
 - `fees_paid_total` (counter): cumulative fees paid by the paper portfolio
-
-Example:
-
-```text
-trade-service MUST expose:
-- equity (gauge): current total equity in quote currency
-- position_qty{symbol} (gauge): current position quantity
-- orders_filled_total{symbol,side} (counter): number of filled paper orders
-```
 
 ## Contents and Concepts
 
@@ -131,10 +140,20 @@ The following environment variables may be used to configure  `Nightwatch`:
 
 | Environment Variable | Purpose | Default Value | Allowed Values |
 |----------------------|-|-|-|
-| LOG_LEVEL            | Sets the default log level [here](src/Nightwatch/common/logging_configuration.py). | "INFO" | See [Python Standard Library API-Reference](https://docs.python.org/3/library/logging.html#logging-levels) |
-| NATS_SERVERS         | Comma-separated NATS URLs. | `nats://127.0.0.1:4222` | Any reachable NATS URL list |
+| DATABASE_URL         | Postgres DSN. **Required** to run `main.py`. Accepts both the bare `postgresql://` form and the SQLAlchemy-style `postgresql+asyncpg://` form. | unset (`main.py` raises `RuntimeError`) | e.g. `postgresql+asyncpg://trade:tradepass@trade-db:5432/trade` |
+| TRADE_SYMBOL         | Symbol streamed from Kraken. | `BTC/USD` | Any Kraken-supported pair |
+| INITIAL_CASH         | Starting cash; only used when no portfolio state is persisted yet. | `10000` | Decimal |
+| ORDER_NOTIONAL       | Fixed quote-currency notional per BUY order. | `100` | Decimal |
+| FEE_RATE             | Paper-execution fee rate, as a fraction of notional. | `0.001` | Decimal |
+| STRATEGY_WINDOW_SEC  | Momentum strategy lookback window. | `10.0` | Float, seconds |
+| STRATEGY_THRESHOLD_PCT | Momentum threshold that triggers a signal. | `0.30` | Float, percent |
+| NATS_SERVERS         | Comma-separated NATS URLs. Unset disables NATS **and the kill switch** entirely (trading is never gated) — see `AGENTS.md`. | unset | Any reachable NATS URL list |
 | NATS_TOKEN           | NATS authentication token. | `""` | Free-form |
-| DATABASE_URL         | Postgres DSN used by the `trade-service` for the `/healthz` DB check. Accepts both the bare `postgresql://` form and the SQLAlchemy-style `postgresql+asyncpg://` form. | unset | e.g. `postgresql+asyncpg://trade:tradepass@trade-db:5432/trade` |
+| HTTP_HOST / HTTP_PORT | uvicorn bind address / port. | `0.0.0.0` / `8000` | host / port |
+| HEALTH_REQUIRE_WS    | Whether `/healthz` requires the Kraken WebSocket to be connected to report `ok`. `docker-compose.yml` sets this to `"0"`. | `true` | `1/true/yes/on` or anything else |
+| LOG_LEVEL            | Sets the default log level [here](src/Nightwatch/common/logging_configuration.py). | `"INFO"` | See [Python Standard Library API-Reference](https://docs.python.org/3/library/logging.html#logging-levels) |
+| LOG_FORMAT           | `json` emits structured logs for Loki; anything else uses the human-readable UTC format. | `"text"` | `text` / `json` |
+| MIGRATIONS_DIR       | Overrides auto-discovery of the `migrations/` directory. | auto-discovered | Filesystem path |
 | RUN_INTEGRATION      | Gate integration tests (`test_integration_*.py`). | unset | `1` to enable |
 
 ## Running with Docker Compose

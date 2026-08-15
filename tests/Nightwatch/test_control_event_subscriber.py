@@ -53,6 +53,7 @@ class TestControlEventSubscriber(unittest.TestCase):
         """Return a mocked NatsClient that captures advisory and message callbacks."""
         mock_client = MagicMock()
         mock_client.is_connected = True
+        mock_client.is_closed = False
 
         mock_push_sub = AsyncMock()
         mock_js = AsyncMock()
@@ -223,6 +224,7 @@ class TestControlEventSubscriber(unittest.TestCase):
         mock_js.subscribe = AsyncMock(return_value=mock_sub)
         mock_client = MagicMock()
         mock_client.is_connected = True
+        mock_client.is_closed = False
         mock_client.jetstream.return_value = mock_js
 
         self.subscriber._nc = mock_client

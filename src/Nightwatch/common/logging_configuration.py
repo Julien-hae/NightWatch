@@ -10,16 +10,28 @@ from typing import Any
 LOGGER = logging.getLogger(__name__)
 
 
+def _gmtime(seconds: float | None) -> time.struct_time:
+    """Convert epoch seconds to UTC; matches ``logging.Formatter.converter``'s exact signature.
+
+    ``time.gmtime`` itself takes an optional argument, which mypy resolves to a
+    zero-argument callable type when read as a value — incompatible with the
+    required ``Callable[[float | None], struct_time]`` of ``Formatter.converter``.
+    This wrapper has a required parameter of the exact expected type, sidestepping
+    that inference gap without a `type: ignore`.
+    """
+    return time.gmtime(seconds)
+
+
 class UTCFormatter(logging.Formatter):
     """UTC formatter which converts timestamps to UTC."""
 
-    converter = time.gmtime
+    converter = staticmethod(_gmtime)
 
 
 class JSONFormatter(logging.Formatter):
     """Structured JSON formatter for log shipping to Loki."""
 
-    converter = time.gmtime
+    converter = staticmethod(_gmtime)
 
     def format(self, record: logging.LogRecord) -> str:
         """Format log record as a single-line JSON object."""

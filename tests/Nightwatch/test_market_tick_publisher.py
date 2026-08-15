@@ -144,6 +144,47 @@ class TestMarketTickPublisherIntegration(unittest.TestCase):
 
         self._run(_test())
 
+    def test_publish_during_outage_does_not_hang_and_resumes_after_reconnect(self) -> None:
+        """Publishing while NATS is down (mid-reconnect) must not block; it must resume once NATS is back.
+
+        Regression test: MarketTickPublisher.publish() used to call connect() whenever
+        client.is_connected was False, which is also true while nats.py is transparently
+        reconnecting in the background. That raced nats.py's own reconnect loop and could
+        hang indefinitely -- exactly the scenario that stalls tick ingestion for real.
+        """
+
+        async def _test() -> None:
+            pub = MarketTickPublisher(
+                config=NatsConnectionConfig(servers=[self.nats.url], reconnect_time_wait=0.1, max_reconnect_attempts=-1)
+            )
+            await pub.connect()
+            self.assertTrue(pub.client.is_connected)
+
+            self.nats.kill()
+
+            async def _publish_during_outage() -> None:
+                for _ in range(20):
+                    await pub.publish(make_tick(), flush=False)
+                    await asyncio.sleep(0.05)
+
+            # Must not hang: bounded by a generous timeout well under the outage duration.
+            await asyncio.wait_for(_publish_during_outage(), timeout=15)
+
+            self.nats.start()
+
+            async def _wait_reconnected() -> None:
+                while not pub.client.is_connected:
+                    await asyncio.sleep(0.05)
+
+            await asyncio.wait_for(_wait_reconnected(), timeout=10)
+
+            subject = await pub.publish(make_tick())
+            self.assertEqual(subject, "market.tick.BTCUSD")
+
+            await pub.close()
+
+        self._run(_test())
+
     def test_maxpayload_exceeded(self) -> None:
         """Publishing a MarketTick with a payload that exceeds the NATS max size raises PayloadTooLargeError."""
 

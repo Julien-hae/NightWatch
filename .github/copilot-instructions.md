@@ -1,31 +1,31 @@
 # Copilot Instructions for NightWatch
 
+> **Source of truth:** [`/AGENTS.md`](../AGENTS.md) at the repo root. It covers the
+> full architecture (tick pipeline, kill switch, persistence), the complete repository
+> layout, known quirks/traps, and every environment variable. Read it first — this
+> file is only a condensed cheat-sheet for Copilot so the essentials don't require a
+> hop, kept intentionally short to avoid drifting out of sync with `AGENTS.md` again.
+
 ## Project Overview
 
-NightWatch is a Python 3.11 trading-bot / market-monitoring service.
-It ingests live market data from the Kraken exchange via WebSocket,
-publishes ticks over NATS messaging, and exposes health and Prometheus
-metrics endpoints through FastAPI.
+NightWatch is an async Python 3.11 crypto **paper**-trading bot. It runs as a single
+process (`trade-service`): ingest live Kraken ticks -> momentum strategy -> risk
+engine -> simulated fill -> atomic Postgres write. It exposes `/healthz` and
+`/metrics` via FastAPI, plus a Grafana + Loki + Prometheus stack
+(`docker-compose.yml`). See `AGENTS.md` for the full per-tick pipeline.
 
 ## Repository Layout
 
 ```
-src/Nightwatch/              # Main package (note the capital "N")
-  common/                    # Shared utilities: logging, symbol normalisation
-  models/                    # Pydantic / dataclass models (MarketTick, Signal, TickBuffer, …)
-  api.py                     # FastAPI app (healthz, /metrics)
-  exchange_market_adapter.py # Abstract base class for exchange adapters
-  kraken_adapter.py          # Kraken WebSocket adapter
-  nats_connection.py         # Base NATS connector
-  publisher.py               # MarketTickPublisher (extends NatsConnector)
-  subscriber.py              # MarketTickSubscriber (extends NatsConnector)
-  metrics.py                 # Prometheus counters (NightwatchMetrics)
-  tick_recorder.py           # JSONL tick recorder
-
-tests/
-  Nightwatch/                # Unit and integration tests (mirror src layout)
-  fixtures/                  # Reusable test helpers: NatsServerFixture, tick/signal factories
+src/Nightwatch/    main.py (entrypoint), api.py, adapters/, common/, db/, messaging/,
+                    metrics/, models/, pipeline/, rules/, strategies/
+tests/Nightwatch/  unittest test_*.py, mirrors src/
+tests/fixtures/    factories + NatsServerFixture + db.py helpers
+migrations/        Alembic migrations for Postgres
+grafana/            dashboards + provisioning
 ```
+
+Full annotated layout, and which pieces are vestigial/not wired up, are in `AGENTS.md`.
 
 ## Prerequisites
 
@@ -105,7 +105,7 @@ This discovers and runs all `test_*.py` files under `tests/`.
 Integration tests that need NATS are automatically **skipped** when
 `RUN_INTEGRATION` is not set (they use `@unittest.skipUnless`).
 
-### Integration tests (require nats-server binary)
+### Integration tests (require nats-server binary; some also require Postgres)
 
 ```bash
 # Install nats-server first (see CI workflow for exact steps)
@@ -114,7 +114,11 @@ RUN_INTEGRATION=1 poetry run coverage run -m xmlrunner discover \
 ```
 
 Integration tests use `tests/fixtures/nats_server.py` which spawns a
-temporary `nats-server` process on a random port.
+temporary `nats-server` process on a random port. A subset also needs
+`DATABASE_URL` pointed at a live Postgres (`docker compose up trade-db`) and
+self-skip without it — **CI does not set `DATABASE_URL`, so those never run in
+CI today.** See `AGENTS.md`'s Testing model section for the exact file list
+and why this matters before trusting a green CI run for DB-layer changes.
 
 ## CI Pipeline (`.github/workflows/ci.yml`)
 
@@ -129,46 +133,28 @@ CI uses `actions/setup-python@v5` with `python-version: "3.11"`.
 
 ## Code Conventions
 
-1. **Pydantic models** for all data structures — use `BaseModel` with
-   `Field` constraints, `field_validator`, and `ConfigDict(str_max_length=255)`.
-2. **Async/await** throughout the networking layer (WebSocket, NATS).
-3. **Abstract base classes** for adapter interfaces (e.g., `ExchangeMarketAdapter`).
-4. **Google-style docstrings** on every public class and method.
-5. **`logging`** module with a centralised UTC formatter
-   (`Nightwatch.common.logging_configuration`). Use `LOGGER = logging.getLogger(__name__)`.
-6. **Prometheus metrics** via an isolated `CollectorRegistry` per `NightwatchMetrics`
-   instance (avoids global state leaking between tests).
-7. **Import style**: absolute imports from the `Nightwatch` package
-   (e.g., `from Nightwatch.models.market_tick import MarketTick`).
-8. **Test fixtures** live in `tests/fixtures/` and provide factory
-   functions (`make_tick()`, `make_signal()`) with sensible defaults.
+Pydantic `BaseModel` for domain data, async throughout the networking/DB layer, ABCs
+for adapters/strategies/rules, `Protocol` for persistence ports, Google-style
+docstrings, one `NightwatchMetrics` (isolated `CollectorRegistry`) threaded through
+every layer. Full list with rationale in `AGENTS.md`'s Code conventions section —
+kept there only, to avoid this list drifting out of sync again.
 
 ## Known Issues & Workarounds
 
-- **mypy error with `UTCFormatter`**: On newer mypy versions (≥1.9) the
-  `converter = time.gmtime` assignment in
-  `src/Nightwatch/common/logging_configuration.py` produces a type
-  incompatibility error. The CI pins `mypy ~1.8` via Poetry to avoid this.
-  If you see this error locally with a newer mypy, it is a known upstream
-  typing issue and does not affect runtime behaviour.
-- **Python ~3.11 constraint**: The Poetry lockfile and `pyproject.toml`
-  restrict the project to `~3.11`. Running `poetry install` on 3.12+
-  will fail. See the workaround above.
-- **No `models/__init__.py`**: The `src/Nightwatch/models/` directory has
-  no `__init__.py`. Imports work because each model is imported directly
-  from its module (e.g., `from Nightwatch.models.market_tick import MarketTick`).
-- **`pytest` not in dependencies**: The CI and `pyproject.toml` use
-  `xmlrunner` (unittest runner), not pytest. Do not add pytest without
-  also updating the test infrastructure.
+- **`pytest` not in dependencies**: the CI and `pyproject.toml` use `xmlrunner`
+  (unittest runner), not pytest. Do not add pytest without also updating the test
+  infrastructure everywhere it's referenced (CI, pre-commit, this doc, `AGENTS.md`).
+- **Python ~3.11 constraint**: `poetry install` fails outright on 3.12+; see the
+  workaround above.
+- More traps, and their current resolution status, are catalogued in `AGENTS.md`'s
+  Known quirks & traps section — check there before assuming something is still
+  broken (or still unfixed).
 
 ## Environment Variables
 
-| Variable | Purpose | Default |
-|----------|---------|---------|
-| `LOG_LEVEL` | Root log level | `"INFO"` |
-| `NATS_SERVERS` | Comma-separated NATS URLs | `nats://127.0.0.1:4222` |
-| `NATS_TOKEN` | NATS auth token | `""` |
-| `RUN_INTEGRATION` | Gate integration tests | unset (tests skipped) |
+Full table (all vars, defaults, which module reads them) is in `AGENTS.md`. The two
+you'll touch most often locally: `DATABASE_URL` (required to run `main.py`) and
+`RUN_INTEGRATION` (gates `test_integration_*.py`).
 
 ## Pre-commit Hooks
 
