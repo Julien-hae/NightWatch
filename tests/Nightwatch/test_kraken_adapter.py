@@ -10,6 +10,7 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 from prometheus_client import CollectorRegistry
+from websockets.exceptions import WebSocketException
 
 from Nightwatch.adapters.kraken_adapter import KrakenAdapter
 from Nightwatch.metrics.metrics import NightwatchMetrics
@@ -204,3 +205,34 @@ class TestKrakenAdapter(unittest.TestCase):
         adapter = KrakenAdapter()
         result = adapter.parse_message({"channel": "ticker", "data": ["invalid"]})
         self.assertIsNone(result)
+
+    @patch("Nightwatch.adapters.kraken_adapter.connect", new_callable=AsyncMock)
+    def test_stream_ticks_awaits_on_disconnected_when_socket_drops(self, mock_connect: AsyncMock) -> None:
+        """A dropped WebSocket triggers on_disconnected before the reconnect backoff sleep."""
+        mock_ws = AsyncMock()
+        mock_ws.recv.side_effect = [WebSocketException("dropped"), RuntimeError("test-stop")]
+        mock_connect.return_value = mock_ws
+        on_disconnected = AsyncMock()
+
+        async def collect() -> None:
+            async for _ in self.adapter.stream_ticks(backoff_max=0, on_disconnected=on_disconnected):
+                pass
+
+        with self.assertRaises(RuntimeError):
+            asyncio.run(collect())
+
+        on_disconnected.assert_awaited_once()
+
+    @patch("Nightwatch.adapters.kraken_adapter.connect", new_callable=AsyncMock)
+    def test_stream_ticks_tolerates_no_on_disconnected_callback(self, mock_connect: AsyncMock) -> None:
+        """Without a callback supplied, a dropped WebSocket still retries without raising."""
+        mock_ws = AsyncMock()
+        mock_ws.recv.side_effect = [WebSocketException("dropped"), RuntimeError("test-stop")]
+        mock_connect.return_value = mock_ws
+
+        async def collect() -> None:
+            async for _ in self.adapter.stream_ticks(backoff_max=0):
+                pass
+
+        with self.assertRaises(RuntimeError):
+            asyncio.run(collect())

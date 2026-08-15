@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, AsyncIterator
@@ -90,8 +91,22 @@ class KrakenAdapter(ExchangeMarketAdapter):
             finally:
                 self.websocket = None
 
-    async def stream_ticks(self, backoff_base: int = 2, backoff_max: int = 60) -> AsyncIterator[MarketTick]:
-        """Yield a continuous stream of validated pydantic MarketTick objects."""
+    async def stream_ticks(
+        self,
+        backoff_base: int = 2,
+        backoff_max: int = 60,
+        on_disconnected: Callable[[], Awaitable[None]] | None = None,
+    ) -> AsyncIterator[MarketTick]:
+        """Yield a continuous stream of validated pydantic MarketTick objects.
+
+        Args:
+            backoff_base: Base for the exponential reconnect backoff, in seconds.
+            backoff_max: Upper bound on the reconnect backoff delay, in seconds.
+            on_disconnected: Optional callback awaited whenever the socket drops,
+                before the reconnect backoff sleep. Lets callers (e.g. ``main.py``)
+                keep a live health/metrics view of the connection without this
+                adapter needing to know about them directly.
+        """
         attempt = 0
 
         while True:
@@ -116,6 +131,8 @@ class KrakenAdapter(ExchangeMarketAdapter):
                 await self.close()
                 if self._metrics is not None:
                     self._metrics.ws_reconnects_total.inc()
+                if on_disconnected is not None:
+                    await on_disconnected()
                 delay = min(backoff_base**attempt, backoff_max)
                 await asyncio.sleep(delay)
                 attempt += 1

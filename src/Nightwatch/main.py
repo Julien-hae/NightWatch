@@ -169,7 +169,11 @@ async def _ingest_ticks(
     interrupt an in-flight trade write. See ``_run``'s shutdown sequence for the bounded wait that
     gives this loop a chance to reach that checkpoint before falling back to a hard cancel.
     """
-    async for tick in kraken.stream_ticks():
+
+    async def _on_ws_disconnected() -> None:
+        health.ws_connected = False
+
+    async for tick in kraken.stream_ticks(on_disconnected=_on_ws_disconnected):
         health.ws_connected = True
         if tick_publisher is not None:
             try:

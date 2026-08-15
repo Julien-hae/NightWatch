@@ -105,6 +105,26 @@ class TestIngestTicksGracefulStop(unittest.TestCase):
         tick_publisher.publish.assert_awaited_once()
         runner.on_market_tick_async.assert_awaited_once()
 
+    def test_ws_disconnect_callback_flips_health_to_false(self) -> None:
+        """_ingest_ticks wires an on_disconnected callback into kraken.stream_ticks that clears ws_connected."""
+        ticks = [make_tick()]
+        kraken = self._make_kraken(ticks)
+        health = ServiceHealth(ws_connected=True)
+        stop_event = asyncio.Event()
+
+        runner = MagicMock()
+        runner.on_market_tick_async = AsyncMock(return_value=None)
+
+        asyncio.run(_ingest_ticks(kraken, runner, health, None, stop_event))
+
+        _, kwargs = kraken.stream_ticks.call_args
+        on_disconnected = kwargs["on_disconnected"]
+        self.assertTrue(health.ws_connected)
+
+        asyncio.run(on_disconnected())
+
+        self.assertFalse(health.ws_connected)
+
 
 class TestShutdownResources(unittest.TestCase):
     """The shutdown helper must drain NATS and close the Kraken/DB connections, best-effort."""
