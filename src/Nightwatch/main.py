@@ -5,6 +5,8 @@ Orchestrates:
 * persistence bootstrap (migrations + asyncpg pool + repos),
 * portfolio rehydration from the database,
 * Kraken WebSocket ingestion → StrategyRunner → PaperTrader → atomic DB write,
+* best-effort tick broadcast over NATS core (``MarketTickPublisher``) for any
+  interested external subscribers,
 * JetStream control-event subscriber (kill switch backlog drain + live updates),
 * FastAPI (``/healthz`` and ``/metrics``) on the same event loop,
 * graceful shutdown on SIGINT/SIGTERM.
@@ -32,6 +34,7 @@ from Nightwatch.db.database import DatabaseConnector
 from Nightwatch.db.repositories import PaperTraderRepos
 from Nightwatch.messaging.control_event_subscriber import ControlEventSubscriber
 from Nightwatch.messaging.nats_connection import NatsConnector
+from Nightwatch.messaging.publisher import MarketTickPublisher
 from Nightwatch.metrics.metrics import NightwatchMetrics
 from Nightwatch.models.bot_control_event import BotControlEvent
 from Nightwatch.models.nats_config import NatsConnectionConfig
@@ -96,9 +99,13 @@ async def _connect_nats(
     cfg: RunConfig,
     kill_switch: KillSwitch,
     metrics: NightwatchMetrics,
-) -> tuple[NatsConnector, ControlEventSubscriber] | None:
-    """Connect NATS + control subscriber, drain backlog. Return ``None`` if disabled."""
+) -> tuple[NatsConnector, ControlEventSubscriber, MarketTickPublisher] | None:
+    """Connect NATS + control subscriber + tick publisher, drain backlog. Return ``None`` if disabled."""
     if not cfg.nats_servers:
+        LOGGER.warning(
+            "NATS_SERVERS is unset: running without a kill switch. BotControlEvents will never be "
+            "received, so trading cannot be halted remotely — only by stopping this process."
+        )
         kill_switch.mark_ready()
         return None
     nats_config = NatsConnectionConfig(servers=cfg.nats_servers.split(","))
@@ -114,7 +121,34 @@ async def _connect_nats(
     drained = await control_sub.drain_backlog(kill_switch)
     LOGGER.info("Drained %d backlog control event(s)", drained)
     await control_sub.subscribe(cb=_on_control)
-    return nats_connector, control_sub
+
+    tick_publisher = MarketTickPublisher(config=nats_config, metrics=metrics)
+    await tick_publisher.connect()
+
+    return nats_connector, control_sub, tick_publisher
+
+
+async def _ingest_ticks(
+    kraken: KrakenAdapter,
+    runner: StrategyRunner,
+    health: ServiceHealth,
+    tick_publisher: MarketTickPublisher | None,
+) -> None:
+    """Stream ticks from Kraken, best-effort publish them, then run them through the pipeline."""
+    async for tick in kraken.stream_ticks():
+        health.ws_connected = True
+        if tick_publisher is not None:
+            try:
+                # flush=False: don't pay a round-trip per tick on the hot ingest path; the NATS
+                # client flushes its write buffer on its own cadence, and a publish failure here
+                # must never block the trading pipeline below.
+                await tick_publisher.publish(tick, flush=False)
+            except Exception as exc:  # noqa: BLE001
+                LOGGER.warning("Failed to publish tick %s to NATS: %s", tick.uid, exc)
+        try:
+            await runner.on_market_tick_async(tick)
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.exception("Tick processing failed for %s: %s", tick.symbol, exc)
 
 
 def _install_signal_handlers(stop_event: asyncio.Event, server: uvicorn.Server) -> None:
@@ -163,9 +197,10 @@ async def _run() -> None:
         paper_trader=paper_trader,
     )
 
-    nats_pair = await _connect_nats(cfg, kill_switch, metrics)
-    nats_connector = nats_pair[0] if nats_pair else None
-    control_sub = nats_pair[1] if nats_pair else None
+    nats_bundle = await _connect_nats(cfg, kill_switch, metrics)
+    nats_connector = nats_bundle[0] if nats_bundle else None
+    control_sub = nats_bundle[1] if nats_bundle else None
+    tick_publisher = nats_bundle[2] if nats_bundle else None
     health.nats_connected = nats_connector.client.is_connected if nats_connector else True
 
     database = DatabaseConnector(database_url=cfg.database_url, pool=persistence.pool)
@@ -180,21 +215,13 @@ async def _run() -> None:
     )
     kraken = KrakenAdapter(symbol=cfg.symbol, metrics=metrics)
 
-    async def _ingest_ticks() -> None:
-        async for tick in kraken.stream_ticks():
-            health.ws_connected = True
-            try:
-                await runner.on_market_tick_async(tick)
-            except Exception as exc:  # noqa: BLE001
-                LOGGER.exception("Tick processing failed for %s: %s", tick.symbol, exc)
-
     server = uvicorn.Server(
         uvicorn.Config(app, host=cfg.http_host, port=cfg.http_port, log_config=None, lifespan="on"),
     )
     stop_event = asyncio.Event()
     _install_signal_handlers(stop_event, server)
 
-    ingest_task = asyncio.create_task(_ingest_ticks(), name="kraken-ingest")
+    ingest_task = asyncio.create_task(_ingest_ticks(kraken, runner, health, tick_publisher), name="kraken-ingest")
     server_task = asyncio.create_task(server.serve(), name="uvicorn-server")
     stop_task = asyncio.create_task(stop_event.wait(), name="stop-event")
 
@@ -213,6 +240,8 @@ async def _run() -> None:
 
         if control_sub is not None:
             await _safe_close("Control subscriber", control_sub.close())
+        if tick_publisher is not None:
+            await _safe_close("Tick publisher", tick_publisher.close())
         if nats_connector is not None and nats_connector.client.is_connected:
             await _safe_close("NATS", nats_connector.close())
         await _safe_close("Kraken", kraken.close())
