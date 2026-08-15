@@ -20,7 +20,7 @@ import asyncio
 import logging
 import os
 import signal
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -95,6 +95,27 @@ async def _safe_close(label: str, coro: Awaitable[object]) -> None:
         LOGGER.warning("%s close failed: %s", label, exc)
 
 
+def _nats_reconnect_callbacks(
+    label: str, metrics: NightwatchMetrics
+) -> tuple[Callable[[], Awaitable[None]], Callable[[], Awaitable[None]]]:
+    """Build disconnect/reconnect callbacks that log and record metrics for a named NATS connection.
+
+    This is what makes reconnection after a NATS restart observable in Loki/Grafana — nats.py
+    reconnects and resumes publish/subscribe on its own, but without these callbacks nothing
+    would surface that an outage happened.
+    """
+
+    async def _on_disconnected() -> None:
+        LOGGER.warning("NATS connection '%s' disconnected; nats.py will attempt to reconnect.", label)
+        metrics.nats_disconnects_total.labels(connection=label).inc()
+
+    async def _on_reconnected() -> None:
+        LOGGER.info("NATS connection '%s' reconnected.", label)
+        metrics.nats_reconnects_total.labels(connection=label).inc()
+
+    return _on_disconnected, _on_reconnected
+
+
 async def _connect_nats(
     cfg: RunConfig,
     kill_switch: KillSwitch,
@@ -109,11 +130,14 @@ async def _connect_nats(
         kill_switch.mark_ready()
         return None
     nats_config = NatsConnectionConfig(servers=cfg.nats_servers.split(","))
+
     nats_connector = NatsConnector(config=nats_config, metrics=metrics)
-    await nats_connector.connect()
+    on_disconnected, on_reconnected = _nats_reconnect_callbacks("nats_connector", metrics)
+    await nats_connector.connect(on_disconnected=on_disconnected, on_reconnected=on_reconnected)
 
     control_sub = ControlEventSubscriber(config=nats_config, metrics=metrics)
-    await control_sub.connect()
+    on_disconnected, on_reconnected = _nats_reconnect_callbacks("control_subscriber", metrics)
+    await control_sub.connect(on_disconnected=on_disconnected, on_reconnected=on_reconnected)
 
     async def _on_control(event: BotControlEvent) -> None:
         kill_switch.apply(event)
@@ -123,7 +147,8 @@ async def _connect_nats(
     await control_sub.subscribe(cb=_on_control)
 
     tick_publisher = MarketTickPublisher(config=nats_config, metrics=metrics)
-    await tick_publisher.connect()
+    on_disconnected, on_reconnected = _nats_reconnect_callbacks("tick_publisher", metrics)
+    await tick_publisher.connect(on_disconnected=on_disconnected, on_reconnected=on_reconnected)
 
     return nats_connector, control_sub, tick_publisher
 

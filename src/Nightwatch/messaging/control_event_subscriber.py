@@ -71,7 +71,9 @@ class ControlEventSubscriber(NatsConnector):
         """
         if cb is None:
             raise ValueError("Callback function must be provided for subscription.")
-        if not self.client.is_connected:
+        if self.client.is_closed:
+            # Don't call connect() while the client is RECONNECTING — racing nats.py's own
+            # reconnect loop with a manual connect() call can hang indefinitely.
             LOGGER.warning("NATS subscriber is not connected. Calling connect().")
             await self.connect()
 
@@ -162,7 +164,7 @@ class ControlEventSubscriber(NatsConnector):
             The number of events applied (0 or 1).
         """
         LOGGER.info("Draining JetStream backlog for control events with timeout %.1f seconds...", timeout)
-        if not self.client.is_connected:
+        if self.client.is_closed:
             LOGGER.warning("NATS subscriber is not connected. Calling connect().")
             await self.connect()
 

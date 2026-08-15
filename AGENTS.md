@@ -13,9 +13,7 @@ risk-check the signal → simulate a fill → persist atomically to Postgres. It
 `/healthz` and `/metrics` (Prometheus) via FastAPI, and ships to a full
 Grafana + Loki + Prometheus observability stack.
 
-Scaffolded from [CookieBlueprint](https://github.com/Julien-hae/CookieBlueprint); some
-prose in `README.md` (the "Getting Started" TODO, the market-service/trade-service
-split in "Metrics Contract") predates the current architecture — see *Known quirks*.
+Scaffolded from [CookieBlueprint](https://github.com/Julien-hae/CookieBlueprint).
 
 ## Architecture: the tick pipeline
 
@@ -34,6 +32,17 @@ stop-event waiter. **Startup order matters:**
    If `NATS_SERVERS` is unset, the kill switch is marked ready immediately and trading
    is never gated (no kill switch available).
 4. FastAPI app + Kraken adapter start; ticks flow in.
+
+All three NATS connections opened in `_connect_nats()` (`nats_connector`, `control_sub`,
+`tick_publisher`) are wired with disconnect/reconnect callbacks
+(`main.py::_nats_reconnect_callbacks`) that log and increment
+`nats_disconnects_total{connection}` / `nats_reconnects_total{connection}`. `nats-py`
+already reconnects and resumes publish/subscribe on its own; these callbacks only make
+an outage observable in Loki/Grafana. Relatedly, `MarketTickPublisher`,
+`MarketTickSubscriber` and `ControlEventSubscriber` check `client.is_closed` (not
+`not client.is_connected`) before calling `connect()` — calling `connect()` while
+`nats-py` is transparently mid-reconnect races its own reconnect loop and can hang
+indefinitely; only a fully closed client should trigger a manual reconnect.
 
 Per tick (`pipeline/strategy_runner.py::_evaluate_tick`):
 
@@ -209,41 +218,27 @@ DB-layer changes.
 ## Known quirks & traps
 
 - **`messaging/subscriber.py` (`MarketTickSubscriber`) and `adapters/tick_recorder.py`
-  (`MarketTickRecorder`) are still dead code in production** — nothing in this repo
-  subscribes to the `market.tick.*` subjects `MarketTickPublisher` broadcasts (below),
-  and nothing calls the JSONL recorder. Both remain fully unit-tested but unwired.
-  Wiring either one up is a similarly-scoped follow-up, not yet done.
-- **`messaging/publisher.py` (`MarketTickPublisher`) is wired into `main.py`** — every
-  ingested tick is best-effort broadcast on NATS core subject `market.tick.<SYMBOL>`
-  (`main.py::_ingest_ticks`), so `ticks_published_total` is live. This used to be dead
-  code (leftover from an earlier two-service split that `README.md`'s "Metrics
-  Contract" section documented as current) but has been re-wired rather than removed,
-  so other services can subscribe to the tick stream. A publish failure is logged and
-  never blocks the trading pipeline (`flush=False`, wrapped in its own try/except).
-- **mypy no longer needs to be pinned, but `pyproject.toml` still pins it** — the
-  `~1.8` constraint existed because `UTCFormatter.converter = time.gmtime` in
-  `common/logging_configuration.py` failed strict type-checking on mypy ≥1.9. Fixed by
-  replacing the direct assignment with a `staticmethod`-wrapped wrapper function typed
-  exactly `(float | None) -> struct_time`, matching what `Formatter.converter` expects
-  — verified clean against both mypy 1.8 and mypy 2.3.1 (whole `src/` tree, not just
-  this file). The pin is now just unexercised insurance; bumping it is a safe, cheap,
-  separate follow-up (needs its own `poetry lock`, not done as part of this fix).
-- **All subpackages now have `__init__.py`.** `models/`, `strategies/`, `metrics/`
-  were missing theirs (inconsistent with `adapters/`, `common/`, `db/`, `messaging/`,
-  `pipeline/`, `rules/`); added for consistency. Every `__init__.py` under
-  `Nightwatch/` needs `# noqa: N999` because the package name itself (capital `N`)
-  trips ruff's module-naming check.
-- **`NatsConnectionConfig`'s docstring no longer claims `NATS_NKEY_SEED` is
-  supported** — the corresponding field is commented out (NKey auth isn't
-  implemented); the docstring previously listed it as if it were live. Only
-  `NATS_SERVERS` and `NATS_TOKEN` do anything today.
-- **`NATS_SERVERS` unset behavior, clarified**: `main.py` skips NATS (and the kill
-  switch) entirely when it's unset, and now logs a loud warning when it does (used to
-  be silent). Separately, `NatsConnectionConfig`'s own `nats://127.0.0.1:4222`
-  fallback default is dead code in every current production path — every real call
-  site either passes `servers=` explicitly or is only reached after already
-  confirming `NATS_SERVERS` is set — so don't assume it's actually load-bearing
-  anywhere today.
+  (`MarketTickRecorder`) are dead code in production** — nothing in this repo
+  subscribes to the `market.tick.*` subjects `MarketTickPublisher` broadcasts, and
+  nothing calls the JSONL recorder. Both remain fully unit-tested but unwired.
+- **`api.py`'s startup handler double-connects an already-connected NATS client**:
+  `main.py` connects `nats_connector` itself in `_connect_nats()`, then passes that
+  *already-connected* instance into `create_app(nats=nats_connector, ...)`, whose own
+  `@app.on_event("startup")` unconditionally calls `await _nats.connect()` again.
+  `nats-py` logs an internal `ERROR: nats: encountered error (TimeoutError)` for this
+  redundant connect on every real startup — harmless in practice (`/healthz` re-reads
+  `client.is_connected` live on every request and settles to `true`), but noisy and
+  worth fixing by only connecting in `create_app`'s startup handler when the injected
+  connector isn't already connected.
+- **mypy is pinned to `~1.8` in `pyproject.toml` but nothing in the code requires
+  it** — the one issue that used to force the pin (`UTCFormatter.converter` typing in
+  `common/logging_configuration.py`) is fixed at the source. The pin is unexercised
+  insurance at this point; relaxing it is safe but needs its own `poetry lock`.
+- **`NATS_SERVERS` unset disables NATS and the kill switch entirely** — trading is
+  never gated, and `main.py` logs a warning when this happens. Separately,
+  `NatsConnectionConfig`'s own `nats://127.0.0.1:4222` fallback default is dead code
+  in every current production path — every real call site either passes `servers=`
+  explicitly or is only reached after `NATS_SERVERS` is already confirmed set.
 - **`HEALTH_REQUIRE_WS` defaults to `true`** in the code, but `docker-compose.yml`
   overrides it to `"0"` for `trade-service` — so `/healthz` in the shipped compose
   stack does *not* require the Kraken WebSocket to be connected to report `ok`. This

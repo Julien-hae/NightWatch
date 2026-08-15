@@ -17,6 +17,8 @@ class NightwatchMetrics:
     ticks_received_total: Counter = field(init=False)
     parse_errors_total: Counter = field(init=False)
     ws_reconnects_total: Counter = field(init=False)
+    nats_disconnects_total: Counter = field(init=False)
+    nats_reconnects_total: Counter = field(init=False)
     ticks_published_total: Counter = field(init=False)
     ticks_consumed_total: Counter = field(init=False)
     signals_total: Counter = field(init=False)
@@ -69,6 +71,18 @@ class NightwatchMetrics:
         self.ws_reconnects_total = Counter(
             "ws_reconnects_total",
             "Total number of WebSocket reconnections",
+            registry=self.registry,
+        )
+        self.nats_disconnects_total = Counter(
+            "nats_disconnects_total",
+            "Total number of NATS disconnections observed, by connection",
+            labelnames=["connection"],
+            registry=self.registry,
+        )
+        self.nats_reconnects_total = Counter(
+            "nats_reconnects_total",
+            "Total number of NATS reconnections observed, by connection",
+            labelnames=["connection"],
             registry=self.registry,
         )
         self.signals_total = Counter(
