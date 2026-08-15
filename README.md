@@ -114,6 +114,11 @@ the full architecture).
 - `equity` (gauge): current total equity (cash + position value)
 - `fees_paid_total` (counter): cumulative fees paid by the paper portfolio
 
+### Replay
+
+- `replay_ticks_total{symbol}` (counter): total ticks republished to NATS by the `replay` CLI, per symbol
+- `replay_duration_seconds` (histogram): time spent running a single `replay` CLI invocation, from file open to completion
+
 ## Contents and Concepts
 
 At first glance one may be overwhelmed by the amount of files and folders present in this directory. This is mainly due to the fact, that each tool uses its own configuration file. The situation has improved with more and more tools adding support for pyproject.toml. The following two tables describe the main structure of the project:

@@ -14,10 +14,12 @@ import argparse
 import asyncio
 import json
 import logging
+import time
 
 from Nightwatch.adapters.tick_replay_reader import TickReplayReader
 from Nightwatch.common.logging_configuration import configure_logger
 from Nightwatch.messaging.publisher import MarketTickPublisher
+from Nightwatch.metrics.metrics import NightwatchMetrics
 from Nightwatch.models.market_tick import MarketTick
 
 LOGGER = logging.getLogger(__name__)
@@ -45,10 +47,15 @@ async def _sleep_for_real_speed(previous: MarketTick | None, tick: MarketTick) -
         await asyncio.sleep(delay)
 
 
-async def _run(args: argparse.Namespace) -> None:
+async def _run(args: argparse.Namespace, metrics: NightwatchMetrics) -> None:
     """Read a MarketTick JSONL file and republish every tick to NATS."""
-    reader = TickReplayReader(path=args.file)
-    publisher = MarketTickPublisher()
+    LOGGER.info(
+        json.dumps({"event": "replay_start", "file": args.file, "speed": args.speed}),
+    )
+    start_time = time.monotonic()
+
+    reader = TickReplayReader(path=args.file, metrics=metrics)
+    publisher = MarketTickPublisher(metrics=metrics)
     await publisher.connect()
 
     published = 0
@@ -61,6 +68,7 @@ async def _run(args: argparse.Namespace) -> None:
             try:
                 await publisher.publish(tick, flush=False)
                 published += 1
+                metrics.replay_ticks_total.labels(symbol=tick.symbol).inc()
             except Exception as exc:  # noqa: BLE001
                 failed += 1
                 LOGGER.warning("Failed to publish tick %s to NATS: %s", tick.uid, exc)
@@ -68,6 +76,9 @@ async def _run(args: argparse.Namespace) -> None:
         await publisher.client.flush(timeout=5)
     finally:
         await publisher.close()
+
+    duration_seconds = time.monotonic() - start_time
+    metrics.replay_duration_seconds.observe(duration_seconds)
 
     LOGGER.info(
         json.dumps(
@@ -78,16 +89,17 @@ async def _run(args: argparse.Namespace) -> None:
                 "tick_count": published + failed,
                 "published": published,
                 "failed": failed,
+                "duration_seconds": duration_seconds,
             },
         ),
     )
 
 
-def main(argv: list[str] | None = None) -> None:
+def main(argv: list[str] | None = None, metrics: NightwatchMetrics | None = None) -> None:
     """Parse args and run the replay CLI to completion."""
     configure_logger()
     args = _parse_args(argv)
-    asyncio.run(_run(args))
+    asyncio.run(_run(args, metrics if metrics is not None else NightwatchMetrics()))
 
 
 if __name__ == "__main__":
