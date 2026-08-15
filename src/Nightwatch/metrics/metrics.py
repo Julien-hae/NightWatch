@@ -42,6 +42,8 @@ class NightwatchMetrics:
     db_up: Gauge = field(init=False)
     db_write_errors_total: Counter = field(init=False)
     rehydration_duration_seconds: Histogram = field(init=False)
+    replay_ticks_total: Counter = field(init=False)
+    replay_duration_seconds: Histogram = field(init=False)
 
     def __post_init__(self) -> None:
         """Create Prometheus counters bound to the instance registry."""
@@ -198,6 +200,17 @@ class NightwatchMetrics:
         self.rehydration_duration_seconds = Histogram(
             "rehydration_duration_seconds",
             "Time spent loading persisted portfolio state at startup",
+            registry=self.registry,
+        )
+        self.replay_ticks_total = Counter(
+            "replay_ticks_total",
+            "Total number of ticks republished to NATS by the replay CLI",
+            labelnames=["symbol"],
+            registry=self.registry,
+        )
+        self.replay_duration_seconds = Histogram(
+            "replay_duration_seconds",
+            "Time spent running a single replay CLI invocation, from file open to completion",
             registry=self.registry,
         )
 

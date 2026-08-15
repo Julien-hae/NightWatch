@@ -1,6 +1,7 @@
 # mypy: disable-error-code="import-untyped"
 """Unit tests for the `replay` CLI entrypoint."""
 
+import json
 import os
 import tempfile
 import unittest
@@ -9,6 +10,7 @@ from unittest.mock import AsyncMock, patch
 
 from Nightwatch.adapters.tick_recorder import MarketTickRecorder
 from Nightwatch.cli.replay import main
+from Nightwatch.metrics.metrics import NightwatchMetrics
 from tests.fixtures.tick_factory import make_tick
 
 
@@ -101,6 +103,59 @@ class TestReplayCli(unittest.TestCase):
 
         self.assertEqual(self.mock_publisher.publish.await_count, 3)
         self.mock_publisher.close.assert_awaited_once()
+
+    def test_replay_ticks_total_incremented_per_symbol(self) -> None:
+        """Each successfully published tick increments replay_ticks_total, labelled by symbol."""
+        recorder = MarketTickRecorder(path=self.path)
+        recorder.record_ticks([make_tick(), make_tick(), make_tick(symbol="ETH/USD")])
+        metrics = NightwatchMetrics()
+
+        main(["--file", self.path], metrics=metrics)
+
+        self.assertEqual(metrics.get_counter_value(metrics.replay_ticks_total, symbol="BTC/USD"), 2.0)
+        self.assertEqual(metrics.get_counter_value(metrics.replay_ticks_total, symbol="ETH/USD"), 1.0)
+
+    def test_replay_ticks_total_not_incremented_on_publish_failure(self) -> None:
+        """A tick that fails to publish does not count toward replay_ticks_total."""
+        recorder = MarketTickRecorder(path=self.path)
+        recorder.record_ticks([make_tick(), make_tick(symbol="ETH/USD")])
+        self.mock_publisher.publish.side_effect = [Exception("boom"), None]
+        metrics = NightwatchMetrics()
+
+        main(["--file", self.path], metrics=metrics)
+
+        self.assertIsNone(metrics.get_counter_value(metrics.replay_ticks_total, symbol="BTC/USD"))
+        self.assertEqual(metrics.get_counter_value(metrics.replay_ticks_total, symbol="ETH/USD"), 1.0)
+
+    def test_replay_duration_seconds_observed(self) -> None:
+        """A single observation is recorded on replay_duration_seconds per run."""
+        recorder = MarketTickRecorder(path=self.path)
+        recorder.record_tick(make_tick())
+        metrics = NightwatchMetrics()
+
+        main(["--file", self.path], metrics=metrics)
+
+        sample_count = next(
+            sample.value
+            for family in metrics.replay_duration_seconds.collect()
+            for sample in family.samples
+            if sample.name.endswith("_count")
+        )
+        self.assertEqual(sample_count, 1.0)
+
+    def test_start_and_end_events_are_logged(self) -> None:
+        """main() logs a replay_start event before running and a replay_end event after."""
+        recorder = MarketTickRecorder(path=self.path)
+        recorder.record_tick(make_tick())
+
+        with self.assertLogs("Nightwatch.cli.replay", level="INFO") as cm:
+            main(["--file", self.path])
+
+        events = [json.loads(line.split(":", 2)[-1]) for line in cm.output if '"event"' in line]
+        self.assertEqual(events[0]["event"], "replay_start")
+        self.assertEqual(events[0]["file"], self.path)
+        self.assertEqual(events[-1]["event"], "replay_end")
+        self.assertEqual(events[-1]["tick_count"], 1)
 
 
 if __name__ == "__main__":
