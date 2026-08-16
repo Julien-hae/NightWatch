@@ -1,0 +1,107 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: NightWatch safety
+    folder: NightWatch
+    interval: 1m
+    rules:
+      - uid: nw-trade-service-down
+        title: trade-service is not being scraped
+        condition: C
+        for: 2m
+        noDataState: Alerting
+        execErrState: Alerting
+        labels:
+          severity: critical
+        annotations:
+          summary: Prometheus has not successfully scraped trade-service for 2 minutes.
+          description: >-
+            up{job="trade-service"} is 0 or missing. The bot's process may be down,
+            crash-looping, or unreachable — check `docker compose logs trade-service`.
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: up{job="trade-service"}
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              expression: A
+              conditions:
+                - evaluator:
+                    type: lt
+                    params:
+                      - 1
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    type: last
+                  type: query
+
+      - uid: nw-postgres-unreachable
+        title: Postgres is unreachable
+        condition: C
+        for: 2m
+        noDataState: Alerting
+        execErrState: Alerting
+        labels:
+          severity: critical
+        annotations:
+          summary: db_up has been 0 (or missing) for 2 minutes.
+          description: >-
+            The connection pool trade-service uses to talk to Postgres is reporting the
+            database as unreachable. Trades cannot be persisted while this is true — see
+            AGENTS.md's atomic-write-and-revert behavior for what happens to in-flight
+            signals during the outage.
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              editorMode: code
+              expr: db_up
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              refId: C
+              expression: A
+              conditions:
+                - evaluator:
+                    type: lt
+                    params:
+                      - 1
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    type: last
+                  type: query
