@@ -243,6 +243,13 @@ async def _ingest_ticks(
         try:
             await runner.on_market_tick_async(tick)
         except Exception as exc:  # noqa: BLE001
+            # No retry: a transient Postgres failure here (already reverted in-memory by
+            # process_and_persist, so memory still matches the DB) permanently drops this
+            # one signal rather than risk reprocessing it — the tick that produced it is
+            # gone once this loop moves on, so "retry" would mean replaying an old signal
+            # against current portfolio state, not the original tick. Deliberate fail-closed
+            # design for a paper-trading bot; watch db_write_errors_total / db_up (with
+            # alerting — see prometheus.yml) to notice when this is happening.
             LOGGER.exception("Tick processing failed for %s: %s", tick.symbol, exc)
         if stop_event.is_set():
             LOGGER.info("Stop requested; finished in-flight tick, exiting ingest loop.")

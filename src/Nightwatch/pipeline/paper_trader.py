@@ -242,6 +242,14 @@ class PaperTrader:
         recorded even when the trade is a no-op (duplicate or SELL with no
         position).
 
+        The signal save is a separate, immediately-committed write, deliberately
+        outside the order/fill/position/cash transaction below: a ``signals`` row
+        with no matching ``orders``/``fills`` row is not database corruption, it
+        means either the signal was a no-op (see above) or the trade_writer failed
+        *after* the signal was saved but before its own transaction committed (the
+        in-memory portfolio is reverted in that case — see the ``except`` block
+        below — so memory and DB still agree on cash/positions either way).
+
         Args:
             signal: An approved trading signal.
 
