@@ -21,7 +21,7 @@ class TestGrafanaComposeWiring(unittest.TestCase):
 
         self.assertIn("  grafana:\n", compose_text)
         self.assertIn("    image: grafana/grafana:11.1.4\n", compose_text)
-        self.assertIn('      - "3000:3000"\n', compose_text)
+        self.assertIn('      - "127.0.0.1:3000:3000"\n', compose_text)
         self.assertIn("./grafana/provisioning:/etc/grafana/provisioning:ro", compose_text)
         self.assertIn("/api/health", compose_text)
 
@@ -85,7 +85,7 @@ class TestLokiComposeWiring(unittest.TestCase):
 
         self.assertIn("  loki:\n", compose_text)
         self.assertIn("    image: grafana/loki:3.1.0\n", compose_text)
-        self.assertIn('      - "3100:3100"\n', compose_text)
+        self.assertIn('      - "127.0.0.1:3100:3100"\n', compose_text)
         self.assertIn("/etc/loki/local-config.yaml", compose_text)
         self.assertIn("/ready", compose_text)
 
