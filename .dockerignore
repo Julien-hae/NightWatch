@@ -1,0 +1,31 @@
+# Version control
+.git
+.gitignore
+.github
+
+# Python environment / caches — the Dockerfile installs its own deps from
+# pyproject.toml/poetry.lock; a local .venv or cache has no business in the
+# build context, let alone the image.
+.venv
+__pycache__
+*.py[cod]
+.mypy_cache
+.pytest_cache
+.ruff_cache
+*.egg-info
+
+# Test artifacts
+.coverage
+coverage.xml
+junittest.xml
+TEST-*.xml
+htmlcov
+
+# Secrets — never send these to the Docker daemon, even though the Dockerfile's
+# selective COPY instructions wouldn't put them in the built image either.
+*.env
+credentials.env
+
+# Editor/IDE
+.idea
+.vscode
