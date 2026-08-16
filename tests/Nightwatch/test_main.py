@@ -3,11 +3,14 @@
 import asyncio
 import signal
 import unittest
+from datetime import datetime, timezone
 from typing import Any, AsyncIterator, Callable
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from Nightwatch.main import _ingest_ticks, _install_signal_handlers, _shutdown_resources
+from Nightwatch.db.repositories import InMemoryKillSwitchStateRepo
+from Nightwatch.main import _ingest_ticks, _install_signal_handlers, _restore_kill_switch_from_postgres, _shutdown_resources
 from Nightwatch.models.service_health import ServiceHealth
+from Nightwatch.pipeline.kill_switch import KillSwitch
 from tests.fixtures.tick_factory import make_tick
 
 
@@ -193,6 +196,53 @@ class TestShutdownResources(unittest.TestCase):
             order,
             ["control_sub", "tick_publisher", "nats_connector", "kraken", "persistence"],
         )
+
+
+class TestRestoreKillSwitchFromPostgres(unittest.TestCase):
+    """The Postgres fallback used when the JetStream control backlog is empty."""
+
+    def test_falls_back_to_persisted_killed_state(self) -> None:
+        """A persisted trading_enabled=False must be applied when the backlog was empty."""
+
+        async def scenario() -> None:
+            repo = InMemoryKillSwitchStateRepo()
+            await repo.save(trading_enabled=False, reason="paused for the weekend", updated_at=datetime.now(timezone.utc))
+
+            kill_switch = KillSwitch()
+            self.assertTrue(kill_switch.trading_enabled)  # starting from the class default
+
+            await _restore_kill_switch_from_postgres(kill_switch, repo)
+
+            self.assertFalse(kill_switch.trading_enabled, "an empty JetStream backlog must not override a persisted kill")
+
+        asyncio.run(scenario())
+
+    def test_no_persisted_state_leaves_default_enabled(self) -> None:
+        """A brand-new deployment with nothing in Postgres yet keeps trading enabled."""
+
+        async def scenario() -> None:
+            repo = InMemoryKillSwitchStateRepo()
+            kill_switch = KillSwitch()
+
+            await _restore_kill_switch_from_postgres(kill_switch, repo)
+
+            self.assertTrue(kill_switch.trading_enabled)
+
+        asyncio.run(scenario())
+
+    def test_falls_back_to_persisted_enabled_state(self) -> None:
+        """A persisted trading_enabled=True is applied too, not just kills."""
+
+        async def scenario() -> None:
+            repo = InMemoryKillSwitchStateRepo()
+            await repo.save(trading_enabled=True, reason="resumed", updated_at=datetime.now(timezone.utc))
+
+            kill_switch = KillSwitch()
+            await _restore_kill_switch_from_postgres(kill_switch, repo)
+
+            self.assertTrue(kill_switch.trading_enabled)
+
+        asyncio.run(scenario())
 
 
 if __name__ == "__main__":
