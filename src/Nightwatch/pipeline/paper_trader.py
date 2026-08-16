@@ -15,6 +15,7 @@ from Nightwatch.models.order_factory import OrderFactoryConfig, SignalDeduplicat
 from Nightwatch.models.paper_execution import PercentageFeeModel, paper_execute
 from Nightwatch.models.portfolio import Portfolio
 from Nightwatch.models.signal import Signal
+from Nightwatch.pipeline.capture import PipelineCapture
 
 if TYPE_CHECKING:
     from Nightwatch.db.bootstrap import PersistenceContext
@@ -40,6 +41,7 @@ class PaperTrader:
         metrics: NightwatchMetrics | None = None,
         deduplicator: SignalDeduplicator | None = None,
         repos: PaperTraderRepos | None = None,
+        capture: PipelineCapture | None = None,
     ) -> None:
         """Initialise the paper trader.
 
@@ -52,12 +54,15 @@ class PaperTrader:
                 created and wired to the duplicates counter from ``metrics``.
             repos: Optional bundle of persistence ports. When omitted, persistence
                 is skipped; see :meth:`attach_repos` to wire one later.
+            capture: Optional sink that records every created order and executed
+                fill as deterministic JSON, for replay-based regression testing.
         """
         self._portfolio = portfolio
         self._order_factory_config = order_factory_config
         self._fee_model = fee_model
         self._metrics = metrics
         self._repos = repos or PaperTraderRepos()
+        self._capture = capture
         self._last_processed_signal_id: uuid.UUID | None = None
         if deduplicator is None:
             duplicates_counter = metrics.signals_duplicates_total if metrics is not None else None
@@ -98,6 +103,8 @@ class PaperTrader:
         last_price = self._portfolio.last_price(order.symbol)
         assert last_price is not None  # guaranteed by create_order_from_signal
         self._log_order_created(order, last_price)
+        if self._capture is not None:
+            self._capture.on_order(order)
 
         fill = paper_execute(order, last_price, self._fee_model)
         self._portfolio.apply_fill(fill)
@@ -107,6 +114,8 @@ class PaperTrader:
             self._metrics.fees_paid_total.inc(float(fill.fee))
         self._refresh_portfolio_metrics()
         self._log_order_filled(order, fill)
+        if self._capture is not None:
+            self._capture.on_fill(fill)
         return fill
 
     def _log_order_created(self, order: Order, price: Decimal) -> None:
@@ -260,6 +269,8 @@ class PaperTrader:
         last_price = self._portfolio.last_price(order.symbol)
         assert last_price is not None  # guaranteed by create_order_from_signal
         self._log_order_created(order, last_price)
+        if self._capture is not None:
+            self._capture.on_order(order)
 
         fill = paper_execute(order, last_price, self._fee_model)
         self._portfolio.apply_fill(fill)
@@ -286,6 +297,8 @@ class PaperTrader:
             self._metrics.fees_paid_total.inc(float(fill.fee))
         self._refresh_portfolio_metrics()
         self._log_order_filled(order, fill)
+        if self._capture is not None:
+            self._capture.on_fill(fill)
         return fill
 
     def attach_repos(self, ctx: "PersistenceContext") -> None:

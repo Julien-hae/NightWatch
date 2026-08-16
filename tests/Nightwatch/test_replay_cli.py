@@ -3,9 +3,11 @@
 
 import json
 import os
+import re
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from unittest.mock import AsyncMock, patch
 
 from Nightwatch.adapters.tick_recorder import MarketTickRecorder
@@ -156,6 +158,100 @@ class TestReplayCli(unittest.TestCase):
         self.assertEqual(events[0]["file"], self.path)
         self.assertEqual(events[-1]["event"], "replay_end")
         self.assertEqual(events[-1]["tick_count"], 1)
+
+
+class TestReplayCliCapture(unittest.TestCase):
+    """Test that --capture-file drives an in-memory pipeline and writes deterministic JSON."""
+
+    _CAPTURE_ENV = {
+        "ORDER_NOTIONAL": "100",
+        "FEE_RATE": "0.001",
+        "INITIAL_CASH": "10000",
+        "STRATEGY_WINDOW_SEC": "10.0",
+        "STRATEGY_THRESHOLD_PCT": "0.30",
+    }
+
+    def setUp(self) -> None:
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.path = os.path.join(self.temp_dir.name, "test_ticks.jsonl")
+        self.capture_path = os.path.join(self.temp_dir.name, "capture.json")
+        patcher = patch("Nightwatch.cli.replay.MarketTickPublisher")
+        self.mock_publisher_cls = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.mock_publisher = self.mock_publisher_cls.return_value
+        self.mock_publisher.connect = AsyncMock()
+        self.mock_publisher.publish = AsyncMock()
+        self.mock_publisher.close = AsyncMock()
+        self.mock_publisher.client.flush = AsyncMock()
+
+    def tearDown(self) -> None:
+        self.temp_dir.cleanup()
+
+    def _record_signal_triggering_ticks(self) -> None:
+        """Record two ticks whose 12% jump clears both the strategy threshold and the min-strength risk rule."""
+        start = datetime.now(timezone.utc)
+        recorder = MarketTickRecorder(path=self.path)
+        recorder.record_ticks(
+            [
+                make_tick(price=Decimal("50000"), timestamp=start),
+                make_tick(price=Decimal("56000"), timestamp=start + timedelta(seconds=1)),
+            ],
+        )
+
+    def test_capture_file_omitted_by_default(self) -> None:
+        """Without --capture-file, no capture file is written and replay behaves as before."""
+        recorder = MarketTickRecorder(path=self.path)
+        recorder.record_tick(make_tick())
+
+        main(["--file", self.path])
+
+        self.assertFalse(os.path.exists(self.capture_path))
+
+    def test_capture_file_contains_signal_order_and_fill(self) -> None:
+        """--capture-file writes a JSON array with a signal, an order and a fill event."""
+        self._record_signal_triggering_ticks()
+
+        with patch.dict(os.environ, self._CAPTURE_ENV):
+            main(["--file", self.path, "--capture-file", self.capture_path])
+
+        with open(self.capture_path, encoding="utf-8") as fh:
+            events = json.load(fh)
+
+        types = [event["type"] for event in events]
+        self.assertIn("signal", types)
+        self.assertIn("order", types)
+        self.assertIn("fill", types)
+        signal_event = next(e for e in events if e["type"] == "signal")
+        self.assertEqual(signal_event["side"], "BUY")
+
+    def test_capture_file_ignores_uuids(self) -> None:
+        """No raw UUID appears anywhere in the captured JSON."""
+        self._record_signal_triggering_ticks()
+
+        with patch.dict(os.environ, self._CAPTURE_ENV):
+            main(["--file", self.path, "--capture-file", self.capture_path])
+
+        with open(self.capture_path, encoding="utf-8") as fh:
+            raw = fh.read()
+
+        uuid_pattern = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+        self.assertIsNone(uuid_pattern.search(raw), "captured JSON must not contain any raw UUID")
+
+    def test_capture_file_run_twice_produces_identical_output(self) -> None:
+        """Replaying the same tick file twice into two capture files yields byte-identical JSON."""
+        self._record_signal_triggering_ticks()
+        second_capture_path = os.path.join(self.temp_dir.name, "capture_2.json")
+
+        with patch.dict(os.environ, self._CAPTURE_ENV):
+            main(["--file", self.path, "--capture-file", self.capture_path])
+            main(["--file", self.path, "--capture-file", second_capture_path])
+
+        with open(self.capture_path, encoding="utf-8") as fh:
+            first_run = fh.read()
+        with open(second_capture_path, encoding="utf-8") as fh:
+            second_run = fh.read()
+
+        self.assertEqual(first_run, second_run)
 
 
 if __name__ == "__main__":
