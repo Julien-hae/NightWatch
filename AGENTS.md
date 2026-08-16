@@ -117,8 +117,9 @@ src/Nightwatch/
 
 tests/
   Nightwatch/                       unittest test_*.py, mirrors src/ + "infra as code" tests
-                                    (test_grafana_compose_wiring.py, test_prometheus_compose_wiring.py) that assert
-                                    on docker-compose.yml / grafana provisioning files as plain text
+                                    (test_grafana_compose_wiring.py, test_prometheus_compose_wiring.py,
+                                    test_grafana_alerting_provisioning.py) that assert on docker-compose.yml /
+                                    grafana provisioning files as plain text
   fixtures/                         make_tick/make_signal/make_order/make_fill/make_risk_decision/make_portfolio
                                     factories; NatsServerFixture (spawns a real nats-server process); db.py
                                     (alembic_cfg, database_url_or_skip, RESET_DB_SQL)
@@ -126,7 +127,10 @@ tests/
 migrations/versions/                Alembic: 0001 signals/orders/fills/positions/equity_snapshots,
                                     0002 portfolio_state, 0003 processing_cursor
 grafana/dashboards/                 bot_health.json, trading.json, nightwatch-overview.json
-grafana/provisioning/               datasource.yml (Prometheus), dashboards.yml (file provider)
+grafana/provisioning/               datasource.yml (Prometheus + Loki, explicit uids), dashboards.yml
+                                    (file provider), alerting/rules.yml (Grafana unified alerting — no
+                                    Alertmanager needed: trade-service-down and postgres-unreachable,
+                                    both alert-on-no-data, 2m debounce)
 promtail.yml                        ships trade-service container logs -> Loki (needs LOG_FORMAT=json)
 docker-compose.yml                  trade-db (pg16) + nats(+JetStream) + trade-service + loki +
                                     promtail + prometheus + grafana

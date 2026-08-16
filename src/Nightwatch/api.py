@@ -106,8 +106,7 @@ def create_app(  # noqa: PLR0915
 
         if _database is not None and _database.configured:
             _health.db_connected = await _database.ping()
-            if _persistence is not None:
-                _metrics.db_up.set(1 if _health.db_connected else 0)
+            _metrics.db_up.set(1 if _health.db_connected else 0)
 
     @app.on_event("shutdown")
     async def shutdown() -> None:
@@ -125,11 +124,15 @@ def create_app(  # noqa: PLR0915
 
     @app.get("/healthz")
     async def healthz() -> Response:
-        """Return the health status of external connections."""
+        """Return the health status of external connections.
+
+        Also refreshes ``db_up`` on every poll — not only when this app instance
+        bootstrapped its own persistence — so a Postgres outage that occurs after
+        startup is reflected in Prometheus, not just in this endpoint's response body.
+        """
         if _database is not None:
             _health.db_connected = await _database.ping()
-            if _persistence is not None:
-                _metrics.db_up.set(1 if _health.db_connected else 0)
+            _metrics.db_up.set(1 if _health.db_connected else 0)
 
         if _nats is not None:
             _health.nats_connected = _nats.client.is_connected
