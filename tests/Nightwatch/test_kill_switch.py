@@ -197,3 +197,31 @@ class TestKillSwitch(unittest.TestCase):
 
         suppressed = self.metric.get_counter_value(self.metric.signals_suppressed_total, reason="kill_switch") or 0.0
         self.assertEqual(suppressed, 2.0)
+
+    def test_gauges_reflect_initial_state_on_construction(self) -> None:
+        """Both kill-switch gauges must show the real starting state immediately, not just after the first event."""
+        ready_switch = KillSwitch(metrics=self.metric)
+        self.assertEqual(self.metric.kill_switch_trading_enabled._value.get(), 1.0)
+        self.assertEqual(self.metric.kill_switch_ready._value.get(), 1.0)
+        self.assertTrue(ready_switch.trading_enabled)  # sanity: matches the gauge
+
+        not_ready_metric = NightwatchMetrics()
+        KillSwitch(metrics=not_ready_metric, ready=False)
+        self.assertEqual(not_ready_metric.kill_switch_ready._value.get(), 0.0)
+
+    def test_mark_ready_sets_the_ready_gauge(self) -> None:
+        kill_switch = KillSwitch(metrics=self.metric, ready=False)
+        self.assertEqual(self.metric.kill_switch_ready._value.get(), 0.0)
+
+        kill_switch.mark_ready()
+
+        self.assertEqual(self.metric.kill_switch_ready._value.get(), 1.0)
+
+    def test_apply_sets_the_trading_enabled_gauge(self) -> None:
+        kill_switch = KillSwitch(metrics=self.metric)
+
+        kill_switch.apply(BotControlEvent(kill=True, timestamp=datetime.now(timezone.utc), reason="gauge test"))
+        self.assertEqual(self.metric.kill_switch_trading_enabled._value.get(), 0.0)
+
+        kill_switch.apply(BotControlEvent(kill=False, timestamp=datetime.now(timezone.utc), reason="gauge test"))
+        self.assertEqual(self.metric.kill_switch_trading_enabled._value.get(), 1.0)

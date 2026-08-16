@@ -31,6 +31,8 @@ class NightwatchMetrics:
     control_events_received_total: Counter = field(init=False)
     control_events_dead_lettered_total: Counter = field(init=False)
     kill_switch_toggles_total: Counter = field(init=False)
+    kill_switch_trading_enabled: Gauge = field(init=False)
+    kill_switch_ready: Gauge = field(init=False)
     signals_duplicates_total: Counter = field(init=False)
     orders_created_total: Counter = field(init=False)
     orders_filled_total: Counter = field(init=False)
@@ -141,6 +143,17 @@ class NightwatchMetrics:
         self.kill_switch_toggles_total = Counter(
             "kill_switch_toggles_total",
             "Total number of kill switch toggles",
+            registry=self.registry,
+        )
+        self.kill_switch_trading_enabled = Gauge(
+            "kill_switch_trading_enabled",
+            "1 when the kill switch currently allows trading, 0 when trading is killed",
+            registry=self.registry,
+        )
+        self.kill_switch_ready = Gauge(
+            "kill_switch_ready",
+            "1 once the JetStream control backlog has been drained and the kill switch state "
+            "restored; 0 means every tick is being suppressed regardless of trading_enabled",
             registry=self.registry,
         )
         self.signals_duplicates_total = Counter(
