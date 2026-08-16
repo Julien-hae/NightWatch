@@ -204,3 +204,67 @@ class TestKrakenAdapter(unittest.TestCase):
         adapter = KrakenAdapter()
         result = adapter.parse_message({"channel": "ticker", "data": ["invalid"]})
         self.assertIsNone(result)
+
+
+class TestStreamTicksBackoff(unittest.TestCase):
+    """Deterministic tests for stream_ticks' exponential reconnect backoff, no real network/sleep."""
+
+    async def _consume_until(self, adapter: KrakenAdapter, sleep_calls: list[float], stop_after: int, backoff_max: int = 60) -> None:
+        """Drive stream_ticks() and raise CancelledError once *stop_after* delays have been recorded."""
+
+        async def fake_sleep(delay: float) -> None:
+            sleep_calls.append(delay)
+            if len(sleep_calls) >= stop_after:
+                raise asyncio.CancelledError()
+
+        with patch("Nightwatch.adapters.kraken_adapter.asyncio.sleep", side_effect=fake_sleep):
+            with self.assertRaises(asyncio.CancelledError):
+                async for _ in adapter.stream_ticks(backoff_base=2, backoff_max=backoff_max):
+                    pass
+
+    def test_backoff_delay_grows_exponentially_on_repeated_connect_failures(self) -> None:
+        """Given Kraken stays unreachable, when reconnecting repeatedly, then the delay doubles each time."""
+        adapter = KrakenAdapter()
+        adapter.connect = AsyncMock(side_effect=ConnectionError("kraken unreachable"))
+        adapter.subscribe = AsyncMock()
+
+        sleep_calls: list[float] = []
+        asyncio.run(self._consume_until(adapter, sleep_calls, stop_after=4))
+
+        self.assertEqual(sleep_calls, [1, 2, 4, 8])
+
+    def test_backoff_delay_caps_at_backoff_max(self) -> None:
+        """Given failures keep piling up, when the doubled delay exceeds backoff_max, then it is capped."""
+        adapter = KrakenAdapter()
+        adapter.connect = AsyncMock(side_effect=ConnectionError("kraken unreachable"))
+        adapter.subscribe = AsyncMock()
+
+        sleep_calls: list[float] = []
+        asyncio.run(self._consume_until(adapter, sleep_calls, stop_after=8, backoff_max=10))
+
+        self.assertEqual(sleep_calls, [1, 2, 4, 8, 10, 10, 10, 10])
+
+    def test_backoff_resets_after_successful_reconnect(self) -> None:
+        """Given reconnect succeeds after prior failures, when the socket drops again, then the delay restarts at base."""
+        adapter = KrakenAdapter()
+        call_count = 0
+
+        async def connect_side_effect() -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 3:  # noqa: PLR2004
+                mock_ws = AsyncMock()
+                mock_ws.recv = AsyncMock(side_effect=ConnectionError("dropped again"))
+                adapter.websocket = mock_ws
+                return
+            raise ConnectionError("kraken unreachable")
+
+        adapter.connect = AsyncMock(side_effect=connect_side_effect)
+        adapter.subscribe = AsyncMock()
+
+        sleep_calls: list[float] = []
+        asyncio.run(self._consume_until(adapter, sleep_calls, stop_after=3))
+
+        # attempt 0 -> 1, attempt 1 -> 2, then the 3rd connect succeeds and resets attempt to 0 before
+        # the immediate recv() failure, so the third delay drops back to the base instead of continuing to 4.
+        self.assertEqual(sleep_calls, [1, 2, 1])

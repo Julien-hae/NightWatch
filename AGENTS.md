@@ -249,6 +249,15 @@ DB-layer changes.
   overrides it to `"0"` for `trade-service` — so `/healthz` in the shipped compose
   stack does *not* require the Kraken WebSocket to be connected to report `ok`. This
   is intentional, not a bug — just non-obvious if you only read the code default.
+- **`.gitignore`'s blanket `*.jsonl` rule silently swallows new golden fixtures**:
+  it exists to keep recorded tick data (`tick_recorder.py` output) out of git, but it
+  also matches any new file under `tests/golden/*.jsonl` — a golden test's input
+  dataset can be committed as "added" locally while `git add` silently skips it,
+  which only surfaces as a `FileNotFoundError` in CI. The narrow negation
+  `!tests/golden/*.jsonl` already covers today's golden fixtures; when adding a new
+  golden dataset outside that directory (or with a different extension pattern),
+  add a matching negation and verify with `git status` that the fixture is actually
+  tracked before pushing.
 
 ## Environment variables
 
