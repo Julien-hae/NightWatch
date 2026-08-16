@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
-from Nightwatch.models.market_tick import MarketTick  # type: ignore[import-untyped]
+from Nightwatch.models.market_tick import MarketTick
 
 
 class TestMarketTick(unittest.TestCase):
@@ -45,7 +45,7 @@ class TestMarketTick(unittest.TestCase):
     def test_missing_fields(self) -> None:
         """Test that missing required fields raise a validation error."""
         with self.assertRaises(ValueError):
-            MarketTick(timestamp=datetime.now(timezone.utc), source="Kraken", schema_version=1)
+            MarketTick(timestamp=datetime.now(timezone.utc), source="Kraken", schema_version=1)  # type: ignore[call-arg]
 
     def test_uid_is_unique_per_instance(self) -> None:
         """Test that each MarketTick instance gets a unique uid."""

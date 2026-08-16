@@ -3,8 +3,8 @@
 import unittest
 from decimal import Decimal
 
-from Nightwatch.models.portfolio import Portfolio  # type: ignore[import-untyped]
-from Nightwatch.models.signal import Side  # type: ignore[import-untyped]
+from Nightwatch.models.portfolio import Portfolio
+from Nightwatch.models.signal import Side
 from tests.fixtures.fill_factory import make_fill
 from tests.fixtures.portfolio_factory import make_portfolio
 

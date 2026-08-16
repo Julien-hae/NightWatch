@@ -188,11 +188,11 @@ DB-touching files: `test_integration_database.py`, `test_integration_pg_reposito
 `test_integration_transactional_ack.py`, `test_integration_paper_trader.py`. They
 `unittest.skipUnless` themselves out when `DATABASE_URL` is absent.
 
-**CI gap**: `.github/workflows/ci.yml`'s `integration` job installs `nats-server` but
-never starts Postgres or sets `DATABASE_URL` — the six files above self-skip in CI
-today and only actually run locally. A green CI run does not mean the Postgres path
-was exercised; run them locally against `docker compose up trade-db` before trusting
-DB-layer changes.
+`.github/workflows/ci.yml`'s `integration` job runs a `postgres:16-alpine` service
+container (health-checked, `DATABASE_URL` set at the job level) alongside `nats-server`,
+so all six files above actually run in CI, not just locally. If you're touching the DB
+layer, still run them locally against `docker compose up trade-db` first — CI is the
+backstop, not the fast feedback loop.
 
 ## Code conventions
 

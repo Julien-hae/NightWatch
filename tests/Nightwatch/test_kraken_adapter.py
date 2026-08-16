@@ -226,8 +226,8 @@ class TestStreamTicksBackoff(unittest.TestCase):
     def test_backoff_delay_grows_exponentially_on_repeated_connect_failures(self) -> None:
         """Given Kraken stays unreachable, when reconnecting repeatedly, then the delay doubles each time."""
         adapter = KrakenAdapter()
-        adapter.connect = AsyncMock(side_effect=ConnectionError("kraken unreachable"))
-        adapter.subscribe = AsyncMock()
+        adapter.connect = AsyncMock(side_effect=ConnectionError("kraken unreachable"))  # type: ignore[method-assign]
+        adapter.subscribe = AsyncMock()  # type: ignore[method-assign]
 
         sleep_calls: list[float] = []
         asyncio.run(self._consume_until(adapter, sleep_calls, stop_after=4))
@@ -237,8 +237,8 @@ class TestStreamTicksBackoff(unittest.TestCase):
     def test_backoff_delay_caps_at_backoff_max(self) -> None:
         """Given failures keep piling up, when the doubled delay exceeds backoff_max, then it is capped."""
         adapter = KrakenAdapter()
-        adapter.connect = AsyncMock(side_effect=ConnectionError("kraken unreachable"))
-        adapter.subscribe = AsyncMock()
+        adapter.connect = AsyncMock(side_effect=ConnectionError("kraken unreachable"))  # type: ignore[method-assign]
+        adapter.subscribe = AsyncMock()  # type: ignore[method-assign]
 
         sleep_calls: list[float] = []
         asyncio.run(self._consume_until(adapter, sleep_calls, stop_after=8, backoff_max=10))
@@ -260,8 +260,8 @@ class TestStreamTicksBackoff(unittest.TestCase):
                 return
             raise ConnectionError("kraken unreachable")
 
-        adapter.connect = AsyncMock(side_effect=connect_side_effect)
-        adapter.subscribe = AsyncMock()
+        adapter.connect = AsyncMock(side_effect=connect_side_effect)  # type: ignore[method-assign]
+        adapter.subscribe = AsyncMock()  # type: ignore[method-assign]
 
         sleep_calls: list[float] = []
         asyncio.run(self._consume_until(adapter, sleep_calls, stop_after=3))
