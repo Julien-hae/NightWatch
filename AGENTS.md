@@ -87,6 +87,15 @@ CLI/ops tool in this repo to publish one** — today only tests exercise
 `ControlEventPublisher`. Triggering a real kill means publishing to that subject
 directly (e.g. `nats pub`) or writing that tool.
 
+**Remote kill is unavailable during a NATS outage** — `KillSwitch.trading_enabled` is
+purely in-memory once `ready`, and is never re-gated by live `nats_connected` state (a
+network blip on the control channel must not itself halt trading, or the system would be
+fragile to transient connectivity issues). While NATS is down, `control_sub` cannot
+receive anything, including a kill command. **The only way to stop trading during a NATS
+outage is to stop the process directly** (`docker compose stop trade-service`, or
+`SIGTERM`/`SIGINT`) — this must be the documented operational fallback, not an assumption
+operators discover mid-incident.
+
 ## Repository layout
 
 ```text
