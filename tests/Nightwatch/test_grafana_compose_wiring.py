@@ -62,6 +62,15 @@ class TestGrafanaComposeWiring(unittest.TestCase):
         self.assertIn("parse_errors_total", dashboard_text)
         self.assertIn('up{job=\\"trade-service\\"}', dashboard_text)
 
+    def test_bot_health_dashboard_shows_kill_switch_state(self) -> None:
+        """The kill switch's current state must be visible on a dashboard, not just a toggle counter."""
+        dashboard_text = BOT_HEALTH_JSON_PATH.read_text()
+
+        self.assertIn('"title": "Kill Switch Ready"', dashboard_text)
+        self.assertIn("kill_switch_ready", dashboard_text)
+        self.assertIn('"title": "Trading Enabled"', dashboard_text)
+        self.assertIn("kill_switch_trading_enabled", dashboard_text)
+
     def test_trading_dashboard_exists_with_expected_panels(self) -> None:
         self.assertTrue(TRADING_JSON_PATH.exists(), msg="Trading dashboard JSON is missing")
         dashboard_text = TRADING_JSON_PATH.read_text()

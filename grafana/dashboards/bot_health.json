@@ -133,6 +133,74 @@
           ]
         }
       }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Kill Switch Ready",
+      "description": "1 once the JetStream control backlog has been drained and kill-switch state restored; 0 means every tick is suppressed regardless of Trading Enabled",
+      "gridPos": {"h": 4, "w": 12, "x": 0, "y": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "kill_switch_ready"
+        }
+      ],
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "green", "value": 1}
+            ]
+          },
+          "mappings": [
+            {"type": "value", "options": {"0": {"text": "NOT READY"}, "1": {"text": "READY"}}}
+          ]
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Trading Enabled",
+      "description": "The current kill-switch state — 0 means trading is killed",
+      "gridPos": {"h": 4, "w": 12, "x": 12, "y": 8},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "kill_switch_trading_enabled"
+        }
+      ],
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "green", "value": 1}
+            ]
+          },
+          "mappings": [
+            {"type": "value", "options": {"0": {"text": "KILLED"}, "1": {"text": "TRADING"}}}
+          ]
+        }
+      }
     }
   ],
   "annotations": {

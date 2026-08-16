@@ -28,6 +28,9 @@ class KillSwitch:
         self.trading_enabled: bool = True
         self._ready: bool = ready
         self._metrics = metrics
+        if self._metrics is not None:
+            self._metrics.kill_switch_trading_enabled.set(1 if self.trading_enabled else 0)
+            self._metrics.kill_switch_ready.set(1 if self._ready else 0)
 
     @property
     def ready(self) -> bool:
@@ -37,6 +40,8 @@ class KillSwitch:
     def mark_ready(self) -> None:
         """Mark the kill switch as ready after the JetStream backlog has been drained."""
         self._ready = True
+        if self._metrics is not None:
+            self._metrics.kill_switch_ready.set(1)
         LOGGER.info("Kill switch marked ready: trading_enabled=%s", self.trading_enabled)
 
     def apply(self, event: BotControlEvent) -> None:
@@ -45,6 +50,8 @@ class KillSwitch:
             if self._metrics is not None:
                 self._metrics.kill_switch_toggles_total.inc()
         self.trading_enabled = not event.kill
+        if self._metrics is not None:
+            self._metrics.kill_switch_trading_enabled.set(1 if self.trading_enabled else 0)
         LOGGER.info(
             "Kill switch updated: trading_enabled=%s reason=%s timestamp=%s",
             self.trading_enabled,
