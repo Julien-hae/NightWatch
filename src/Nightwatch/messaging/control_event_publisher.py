@@ -33,7 +33,7 @@ class ControlEventPublisher(NatsConnector):
         stream already exists it is left unchanged; otherwise it is created
         with bounded retention (10 000 messages / 24-hour max age).
         """
-        if not self.client.is_connected:
+        if self.client.is_closed:
             LOGGER.warning("NATS publisher is not connected. Calling connect().")
             await self.connect()
 
