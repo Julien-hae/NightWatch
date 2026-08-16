@@ -1,3 +1,4 @@
+# mypy: disable-error-code="import-untyped"
 """Tests for the KrakenAdapter class."""
 
 import asyncio
