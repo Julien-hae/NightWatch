@@ -8,6 +8,7 @@ from Nightwatch.models.market_tick import MarketTick
 from Nightwatch.models.signal import Signal
 from Nightwatch.models.strategy_decision import StrategyDecision
 from Nightwatch.models.tick_buffer import TickBuffer
+from Nightwatch.pipeline.capture import PipelineCapture
 from Nightwatch.pipeline.kill_switch import KillSwitch
 from Nightwatch.pipeline.paper_trader import PaperTrader
 from Nightwatch.pipeline.risk_engine import RiskEngine
@@ -27,6 +28,7 @@ class StrategyRunner:
         risk_engine: RiskEngine | None = None,
         kill_switch: KillSwitch | None = None,
         paper_trader: PaperTrader | None = None,
+        capture: PipelineCapture | None = None,
     ) -> None:
         """Initializes the StrategyRunner with the given strategy, tick buffer, and optional metrics."""
         self._strategy = strategy
@@ -35,6 +37,7 @@ class StrategyRunner:
         self._risk_engine = risk_engine if risk_engine is not None else RiskEngine.create_default(metrics=self._metric)
         self._kill_switch = kill_switch if kill_switch is not None else KillSwitch()
         self._paper_trader = paper_trader
+        self._capture = capture
         self._was_killed: bool = False
 
     def on_market_tick(self, tick: MarketTick) -> Signal | None:
@@ -105,6 +108,8 @@ class StrategyRunner:
                 default=str,
             )
         )
+        if self._capture is not None:
+            self._capture.on_signal(signal)
         return signal
 
     def _is_suppressed_by_kill_switch(self, tick: MarketTick) -> bool:
