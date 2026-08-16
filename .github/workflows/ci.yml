@@ -3,6 +3,35 @@ permissions:
   contents: read
 on: [push, pull_request]
 jobs:
+  container-scan:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t nightwatch:scan .
+      # Report-only: base-image OS packages and Python dependencies will always carry
+      # some HIGH/CRITICAL CVEs at any given time, many with no upstream fix yet, so
+      # failing the build on every one of them would make CI red for reasons unrelated
+      # to code changes. Findings are uploaded to the repo's Security tab (SARIF) for
+      # visibility and tracking instead of gating merges.
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: nightwatch:scan
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: "0"
+      - name: Upload Trivy results to the Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+
   quality:
     runs-on: ubuntu-latest
     steps:
