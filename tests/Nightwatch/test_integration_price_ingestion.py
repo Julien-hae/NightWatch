@@ -60,11 +60,18 @@ class TestPriceIngestionIntegration(unittest.TestCase):
         """Run *coro* on the shared class-level event loop."""
         return self.loop.run_until_complete(coro)
 
+    # BTC/USD ticks continuously on Kraken (many updates/second under normal market
+    # conditions), so a single tick genuinely never arriving within this window is
+    # itself an actionable signal, not something to wait out indefinitely. Bounding
+    # the wait turns "test hangs until the CI job's own timeout" into a clear,
+    # attributable failure.
+    _SINGLE_TICK_TIMEOUT_SEC = 30
+
     def test_publish_tick_from_kraken(self) -> None:
         """Full pipeline: Kraken WS → parse → MarketTick → NATS publish."""
 
         async def _test() -> None:
-            tick = await self.adapter.stream_ticks().__anext__()
+            tick = await asyncio.wait_for(self.adapter.stream_ticks().__anext__(), timeout=self._SINGLE_TICK_TIMEOUT_SEC)
 
             self.assertIsInstance(tick, MarketTick)
             subject = await self.publisher.publish(tick)
@@ -81,7 +88,7 @@ class TestPriceIngestionIntegration(unittest.TestCase):
             await sub_client.connect(servers=[self.nats.url], token=os.getenv("NATS_TOKEN", ""))
             sub = await sub_client.subscribe("market.tick.BTCUSD")
 
-            tick = await self.adapter.stream_ticks().__anext__()
+            tick = await asyncio.wait_for(self.adapter.stream_ticks().__anext__(), timeout=self._SINGLE_TICK_TIMEOUT_SEC)
             await self.publisher.publish(tick)
 
             msg = await asyncio.wait_for(sub.next_msg(), timeout=5)
@@ -100,31 +107,43 @@ class TestPriceIngestionIntegration(unittest.TestCase):
 
         self._run(_test())
 
+    async def _run_ingest_window(self, seconds: float) -> tuple[int, list[str]]:
+        """Pump ticks through publish() for *seconds*; return (published_count, errors)."""
+        published = 0
+        errors: list[str] = []
+        deadline = time.monotonic() + seconds
+
+        try:
+            async for tick in self.adapter.stream_ticks():
+                if time.monotonic() >= deadline:
+                    break
+                try:
+                    await self.publisher.publish(tick, flush=False)
+                    published += 1
+                except Exception as exc:  # noqa: BLE001
+                    errors.append(str(exc))
+        except asyncio.TimeoutError:
+            pass
+
+        return published, errors
+
     def test_system_runs_30_seconds_without_crash(self) -> None:
-        """The ingestion pipeline processes ticks for 30 s without errors."""
+        """The ingestion pipeline processes ticks for 30 s without errors.
 
-        async def _test() -> None:
-            published = 0
-            errors: list[str] = []
-            deadline = time.monotonic() + 30
+        A single 30s window against a real, uncontrolled external service can
+        legitimately come up empty on a transient connectivity blip rather than a
+        real regression — retries once with a fresh window before failing. A real
+        break in the pipeline (a parse/publish bug) fails both attempts identically;
+        it isn't papered over by the retry.
+        """
 
-            try:
-                async for tick in self.adapter.stream_ticks():
-                    if time.monotonic() >= deadline:
-                        break
-                    try:
-                        await self.publisher.publish(tick, flush=False)
-                        published += 1
-                    except Exception as exc:  # noqa: BLE001
-                        errors.append(str(exc))
-            except asyncio.TimeoutError:
-                pass
+        published, errors = self._run(self._run_ingest_window(30))
+        if published == 0 and not errors:
+            published, errors = self._run(self._run_ingest_window(30))
 
-            self.assertEqual(errors, [], f"Pipeline produced errors: {errors}")
-            self.assertGreater(
-                published,
-                0,
-                "Expected at least one tick published in 30 seconds",
-            )
-
-        self._run(_test())
+        self.assertEqual(errors, [], f"Pipeline produced errors: {errors}")
+        self.assertGreater(
+            published,
+            0,
+            "Expected at least one tick published across two 30s windows",
+        )
