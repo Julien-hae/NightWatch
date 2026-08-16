@@ -70,6 +70,8 @@ class TestGrafanaComposeWiring(unittest.TestCase):
         self.assertIn("kill_switch_ready", dashboard_text)
         self.assertIn('"title": "Trading Enabled"', dashboard_text)
         self.assertIn("kill_switch_trading_enabled", dashboard_text)
+        self.assertIn('"title": "Kill Switch Available"', dashboard_text)
+        self.assertIn("kill_switch_available", dashboard_text)
 
     def test_trading_dashboard_exists_with_expected_panels(self) -> None:
         self.assertTrue(TRADING_JSON_PATH.exists(), msg="Trading dashboard JSON is missing")

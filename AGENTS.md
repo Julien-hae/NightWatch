@@ -272,10 +272,15 @@ backstop, not the fast feedback loop.
   `common/logging_configuration.py`) is fixed at the source. The pin is unexercised
   insurance at this point; relaxing it is safe but needs its own `poetry lock`.
 - **`NATS_SERVERS` unset disables NATS and the kill switch entirely** — trading is
-  never gated, and `main.py` logs a warning when this happens. Separately,
-  `NatsConnectionConfig`'s own `nats://127.0.0.1:4222` fallback default is dead code
-  in every current production path — every real call site either passes `servers=`
-  explicitly or is only reached after `NATS_SERVERS` is already confirmed set.
+  never gated, `metrics.kill_switch_available` is pinned to `0`, and `main.py` logs a
+  **CRITICAL** line when this happens (not a warning — losing the only remote way to
+  halt trading deserves to page someone, not scroll past in a log). Set
+  `REQUIRE_KILL_SWITCH=true` to make `RunConfig.from_env()` refuse to start at all in
+  this state instead — checked before any other startup work (migrations, DB pool,
+  rehydration), so it fails immediately rather than after doing work it'll discard.
+  Separately, `NatsConnectionConfig`'s own `nats://127.0.0.1:4222` fallback default is
+  dead code in every current production path — every real call site either passes
+  `servers=` explicitly or is only reached after `NATS_SERVERS` is already confirmed set.
 - **`HEALTH_REQUIRE_WS` defaults to `true`** in the code, but `docker-compose.yml`
   overrides it to `"0"` for `trade-service` — so `/healthz` in the shipped compose
   stack does *not* require the Kraken WebSocket to be connected to report `ok`. This
@@ -303,6 +308,7 @@ backstop, not the fast feedback loop.
 | `STRATEGY_THRESHOLD_PCT` | `main.py` | `0.30` | Momentum threshold to emit a signal. |
 | `NATS_SERVERS` | `main.py`, `api.py`, `NatsConnectionConfig` | unset | Comma-separated. See *Known quirks* for the unset-behavior split. |
 | `NATS_TOKEN` | `NatsConnectionConfig` | `""` | Auth token. |
+| `REQUIRE_KILL_SWITCH` | `main.py` | `false` | `true` refuses to start (`RunConfig.from_env()` raises) when `NATS_SERVERS` is unset, instead of running with trading ungated. |
 | `HTTP_HOST` / `HTTP_PORT` | `main.py` | `0.0.0.0` / `8000` | uvicorn bind address. |
 | `HEALTH_REQUIRE_WS` | `api.py` | `true` | Whether `/healthz` needs `ws_connected`. compose sets `"0"`. |
 | `LOG_LEVEL` | `common/logging_configuration.py` | `INFO` | Falls back to `INFO` with a warning on an unknown name. |

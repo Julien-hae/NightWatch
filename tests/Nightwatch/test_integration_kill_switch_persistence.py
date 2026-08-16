@@ -90,6 +90,7 @@ class TestKillSwitchSurvivesEmptyBacklog(unittest.TestCase):
             nats_servers=self.nats.url,
             http_host="127.0.0.1",
             http_port=8000,
+            require_kill_switch=False,
         )
 
     async def _boot_and_connect(self, ctx: PersistenceContext, kill_switch: KillSwitch) -> tuple[Any, Any, Any]:

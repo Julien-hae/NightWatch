@@ -28,6 +28,7 @@ class TestMetricsContractIntegration(unittest.TestCase):
         metrics.fees_paid_total.inc(2.5)
         metrics.kill_switch_trading_enabled.set(1)
         metrics.kill_switch_ready.set(1)
+        metrics.kill_switch_available.set(1)
 
         client = TestClient(create_app(metrics=metrics))
         try:
@@ -53,6 +54,7 @@ class TestMetricsContractIntegration(unittest.TestCase):
             r"(?m)^fees_paid_total\s+",
             r"(?m)^kill_switch_trading_enabled\s+",
             r"(?m)^kill_switch_ready\s+",
+            r"(?m)^kill_switch_available\s+",
         ]
 
         for pattern in required_patterns:

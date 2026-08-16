@@ -1,14 +1,24 @@
 """Tests for graceful shutdown wiring in main.py (SIGINT/SIGTERM handling, drain, close)."""
 
 import asyncio
+import os
 import signal
 import unittest
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any, AsyncIterator, Callable
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from Nightwatch.db.repositories import InMemoryKillSwitchStateRepo
-from Nightwatch.main import _ingest_ticks, _install_signal_handlers, _restore_kill_switch_from_postgres, _shutdown_resources
+from Nightwatch.main import (
+    RunConfig,
+    _connect_nats,
+    _ingest_ticks,
+    _install_signal_handlers,
+    _restore_kill_switch_from_postgres,
+    _shutdown_resources,
+)
+from Nightwatch.metrics.metrics import NightwatchMetrics
 from Nightwatch.models.service_health import ServiceHealth
 from Nightwatch.pipeline.kill_switch import KillSwitch
 from tests.fixtures.tick_factory import make_tick
@@ -243,6 +253,63 @@ class TestRestoreKillSwitchFromPostgres(unittest.TestCase):
             self.assertTrue(kill_switch.trading_enabled)
 
         asyncio.run(scenario())
+
+
+class TestRequireKillSwitch(unittest.TestCase):
+    """REQUIRE_KILL_SWITCH=true must refuse to start at all without NATS_SERVERS."""
+
+    def _env(self, **overrides: str) -> dict[str, str]:
+        base = {"DATABASE_URL": "postgresql://localhost/trade"}
+        base.update(overrides)
+        return base
+
+    def test_raises_when_required_but_nats_servers_unset(self) -> None:
+        with patch.dict(os.environ, self._env(REQUIRE_KILL_SWITCH="true"), clear=True):
+            with self.assertRaises(RuntimeError) as ctx:
+                RunConfig.from_env()
+            self.assertIn("REQUIRE_KILL_SWITCH", str(ctx.exception))
+
+    def test_succeeds_when_required_and_nats_servers_set(self) -> None:
+        with patch.dict(os.environ, self._env(REQUIRE_KILL_SWITCH="true", NATS_SERVERS="nats://nats:4222"), clear=True):
+            cfg = RunConfig.from_env()
+
+            self.assertTrue(cfg.require_kill_switch)
+            self.assertEqual(cfg.nats_servers, "nats://nats:4222")
+
+    def test_defaults_to_not_required_preserving_existing_behavior(self) -> None:
+        """Without REQUIRE_KILL_SWITCH set, an unset NATS_SERVERS must still just warn, not raise."""
+        with patch.dict(os.environ, self._env(), clear=True):
+            cfg = RunConfig.from_env()
+
+            self.assertFalse(cfg.require_kill_switch)
+            self.assertIsNone(cfg.nats_servers)
+
+
+class TestKillSwitchAvailableGauge(unittest.TestCase):
+    """kill_switch_available must reflect whether NATS_SERVERS was configured at startup."""
+
+    def test_zero_when_nats_servers_unset(self) -> None:
+        cfg = RunConfig(
+            symbol="BTC/USD",
+            initial_cash=Decimal("10000"),
+            order_notional=Decimal("100"),
+            fee_rate=Decimal("0.001"),
+            window_sec=10.0,
+            threshold_pct=0.3,
+            database_url="postgresql://localhost/trade",
+            nats_servers=None,
+            http_host="0.0.0.0",  # noqa: S104
+            http_port=8000,
+            require_kill_switch=False,
+        )
+        metrics = NightwatchMetrics()
+        kill_switch = KillSwitch(metrics=metrics, ready=False)
+
+        bundle = asyncio.run(_connect_nats(cfg, kill_switch, metrics))
+
+        self.assertIsNone(bundle)
+        self.assertEqual(metrics.kill_switch_available._value.get(), 0.0)  # noqa: SLF001
+        self.assertTrue(kill_switch.ready)  # unset NATS_SERVERS still marks ready — trading isn't gated
 
 
 if __name__ == "__main__":

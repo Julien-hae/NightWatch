@@ -201,6 +201,40 @@
           ]
         }
       }
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Kill Switch Available",
+      "description": "1 when NATS_SERVERS is configured so the kill switch can receive commands; 0 means trading can never be halted remotely for this process's lifetime, only by stopping it",
+      "gridPos": {"h": 4, "w": 12, "x": 0, "y": 12},
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "kill_switch_available"
+        }
+      ],
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "green", "value": 1}
+            ]
+          },
+          "mappings": [
+            {"type": "value", "options": {"0": {"text": "UNAVAILABLE"}, "1": {"text": "AVAILABLE"}}}
+          ]
+        }
+      }
     }
   ],
   "annotations": {
