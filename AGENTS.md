@@ -22,7 +22,15 @@ loop with three concurrent tasks: the Kraken ingest loop, the uvicorn server, an
 stop-event waiter. **Startup order matters:**
 
 1. `db/bootstrap.py::bootstrap_persistence()` — runs `alembic upgrade head`, opens an
-   asyncpg pool, builds every `Pg*Repo`.
+   asyncpg pool, builds every `Pg*Repo`, and takes a session-level Postgres advisory
+   lock (`pg_try_advisory_lock`, key `_SINGLETON_LOCK_KEY`) on a dedicated connection
+   held for the process's lifetime. `Signal.uid`/`Order.signal_id` are generated
+   per-process, not derived from the tick itself, so two concurrently running
+   instances reacting to the same market data would each create their own,
+   non-conflicting orders — nothing else would catch that. If the lock is already
+   held, `bootstrap_persistence()` raises `SingletonLockError` and the process exits
+   immediately rather than silently double-trading. Never run more than one instance
+   of this service against the same database.
 2. `PaperTrader.rehydrate()` — restores cash, positions and the processing cursor from
    Postgres.
 3. If `NATS_SERVERS` is set, `ControlEventSubscriber.drain_backlog()` restores
@@ -185,8 +193,9 @@ without also replacing the runner everywhere (CI, pre-commit, `pyproject.toml`).
 
 DB-touching files: `test_integration_database.py`, `test_integration_pg_repositories.py`,
 `test_integration_migrations.py`, `test_integration_smoke_restart.py`,
-`test_integration_transactional_ack.py`, `test_integration_paper_trader.py`. They
-`unittest.skipUnless` themselves out when `DATABASE_URL` is absent.
+`test_integration_transactional_ack.py`, `test_integration_paper_trader.py`,
+`test_integration_singleton_lock.py`. They `unittest.skipUnless` themselves out when
+`DATABASE_URL` is absent.
 
 **CI gap**: `.github/workflows/ci.yml`'s `integration` job installs `nats-server` but
 never starts Postgres or sets `DATABASE_URL` — the six files above self-skip in CI

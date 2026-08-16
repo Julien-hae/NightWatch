@@ -27,6 +27,22 @@ from Nightwatch.metrics.metrics import NightwatchMetrics
 
 LOGGER = logging.getLogger(__name__)
 
+# Arbitrary 64-bit key for the singleton advisory lock (see bootstrap_persistence).
+# Must not collide with any other pg_advisory_lock key ever taken against this
+# database — nothing else in this codebase uses advisory locks today.
+_SINGLETON_LOCK_KEY = 727_363_514_002_026
+
+
+class SingletonLockError(RuntimeError):
+    """Raised when another process already holds the trade-service singleton lock.
+
+    Signal.uid/Order.signal_id are generated per-process (uuid4(), not derived from
+    the tick itself), so two concurrently running instances reacting to the same
+    market data would each create their own, non-conflicting orders — silently
+    doubling every position and cash movement with nothing to catch it. This lock
+    makes that scenario a loud startup failure instead of a silent one.
+    """
+
 
 @dataclass
 class PersistenceContext:
@@ -41,9 +57,14 @@ class PersistenceContext:
     equity_snapshot_repo: PgEquitySnapshotRepo
     processing_cursor_repo: PgProcessingCursorRepo
     trade_writer: PgAtomicTradeWriter
+    _lock_connection: asyncpg.Connection
 
     async def close(self) -> None:
-        """Close the underlying connection pool."""
+        """Release the singleton advisory lock, then close the connection pool."""
+        try:
+            await self._lock_connection.execute("SELECT pg_advisory_unlock($1)", _SINGLETON_LOCK_KEY)
+        finally:
+            await self._lock_connection.close()
         await self.pool.close()
 
 
@@ -82,6 +103,11 @@ async def bootstrap_persistence(
 ) -> PersistenceContext:
     """Apply migrations, open an asyncpg pool, and build every Pg repository.
 
+    Also takes a session-level Postgres advisory lock on a dedicated connection
+    (held for the lifetime of the returned :class:`PersistenceContext`) to
+    enforce that only one instance of this service runs against a given
+    database at a time. See :class:`SingletonLockError` for why this matters.
+
     Args:
         database_url: Postgres DSN. May use ``postgresql+asyncpg://`` form.
         metrics: Optional metrics instance. Sets ``db_up`` on success and
@@ -93,22 +119,42 @@ async def bootstrap_persistence(
         A :class:`PersistenceContext` holding the pool and configured repos.
 
     Raises:
-        Exception: Re-raises the first failure encountered; ``db_up`` is set to
-            ``0`` before re-raising when *metrics* is provided.
+        SingletonLockError: Another process already holds the singleton lock
+            against this database.
+        Exception: Re-raises any other failure encountered; ``db_up`` is set
+            to ``0`` before re-raising when *metrics* is provided.
     """
+    pool: asyncpg.Pool | None = None
+    lock_connection: asyncpg.Connection | None = None
     try:
         await asyncio.to_thread(apply_migrations, database_url)
-        pool: asyncpg.Pool = await asyncpg.create_pool(
+        pool = await asyncpg.create_pool(
             to_async_dsn(database_url),
             min_size=pool_min_size,
             max_size=pool_max_size,
         )
+
+        # A dedicated connection, outside the pool, so the lock is held for this
+        # context's whole lifetime rather than released back to the pool the moment
+        # whichever coroutine acquired it finishes.
+        lock_connection = await asyncpg.connect(to_async_dsn(database_url))
+        acquired = await lock_connection.fetchval("SELECT pg_try_advisory_lock($1)", _SINGLETON_LOCK_KEY)
+        if not acquired:
+            raise SingletonLockError(
+                "Another trade-service instance already holds the singleton lock on this database. "
+                "Running two instances against the same Postgres and Kraken feed would double-trade — "
+                "stop the other instance first."
+            )
     except Exception:
         if metrics is not None:
             metrics.db_up.set(0)
+        if lock_connection is not None:
+            await lock_connection.close()
+        if pool is not None:
+            await pool.close()
         raise
 
-    LOGGER.info("DB connected")
+    LOGGER.info("DB connected; singleton lock acquired")
     if metrics is not None:
         metrics.db_up.set(1)
 
@@ -122,4 +168,5 @@ async def bootstrap_persistence(
         equity_snapshot_repo=PgEquitySnapshotRepo(pool, metrics=metrics),
         processing_cursor_repo=PgProcessingCursorRepo(pool, metrics=metrics),
         trade_writer=PgAtomicTradeWriter(pool, metrics=metrics),
+        _lock_connection=lock_connection,
     )
