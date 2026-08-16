@@ -69,13 +69,29 @@ class RunConfig:
     nats_servers: str | None
     http_host: str
     http_port: int
+    require_kill_switch: bool
 
     @classmethod
     def from_env(cls) -> "RunConfig":
-        """Build a config from ``os.environ``; raise when ``DATABASE_URL`` is unset."""
+        """Build a config from ``os.environ``.
+
+        Raises:
+            RuntimeError: ``DATABASE_URL`` is unset, or ``REQUIRE_KILL_SWITCH`` is
+                truthy while ``NATS_SERVERS`` is unset — checked here, before any
+                other startup work (migrations, DB pool, rehydration), so a
+                deployment that must not run without a working kill switch fails
+                immediately instead of silently starting ungated.
+        """
         database_url = os.environ.get("DATABASE_URL")
         if not database_url:
             raise RuntimeError("DATABASE_URL must be set for production startup")
+        nats_servers = os.environ.get("NATS_SERVERS")
+        require_kill_switch = os.environ.get("REQUIRE_KILL_SWITCH", "false").strip().lower() in {"1", "true", "yes", "on"}
+        if require_kill_switch and not nats_servers:
+            raise RuntimeError(
+                "REQUIRE_KILL_SWITCH is set but NATS_SERVERS is unset: refusing to start without a working "
+                "kill switch. Set NATS_SERVERS, or unset REQUIRE_KILL_SWITCH to accept running ungated."
+            )
         return cls(
             symbol=os.environ.get("TRADE_SYMBOL", "BTC/USD"),
             initial_cash=Decimal(os.environ.get("INITIAL_CASH", "10000")),
@@ -84,9 +100,10 @@ class RunConfig:
             window_sec=float(os.environ.get("STRATEGY_WINDOW_SEC", "10.0")),
             threshold_pct=float(os.environ.get("STRATEGY_THRESHOLD_PCT", "0.30")),
             database_url=database_url,
-            nats_servers=os.environ.get("NATS_SERVERS"),
+            nats_servers=nats_servers,
             http_host=os.environ.get("HTTP_HOST", "0.0.0.0"),  # noqa: S104
             http_port=int(os.environ.get("HTTP_PORT", "8000")),
+            require_kill_switch=require_kill_switch,
         )
 
 
@@ -153,12 +170,15 @@ async def _connect_nats(
 ) -> tuple[NatsConnector, ControlEventSubscriber, MarketTickPublisher] | None:
     """Connect NATS + control subscriber + tick publisher, drain backlog. Return ``None`` if disabled."""
     if not cfg.nats_servers:
-        LOGGER.warning(
+        LOGGER.critical(
             "NATS_SERVERS is unset: running without a kill switch. BotControlEvents will never be "
-            "received, so trading cannot be halted remotely — only by stopping this process."
+            "received, so trading cannot be halted remotely — only by stopping this process. Set "
+            "REQUIRE_KILL_SWITCH=true to refuse to start in this state instead."
         )
+        metrics.kill_switch_available.set(0)
         kill_switch.mark_ready()
         return None
+    metrics.kill_switch_available.set(1)
     nats_config = NatsConnectionConfig(servers=cfg.nats_servers.split(","))
 
     nats_connector = NatsConnector(config=nats_config, metrics=metrics)

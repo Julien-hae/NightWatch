@@ -121,6 +121,9 @@ the full architecture).
   how often it has changed.
 - `kill_switch_ready` (gauge): 1 once the JetStream control backlog has been drained and kill-switch
   state restored; 0 means every tick is being suppressed regardless of `kill_switch_trading_enabled`.
+- `kill_switch_available` (gauge): 1 when `NATS_SERVERS` was configured at startup so the kill switch
+  can receive commands at all; 0 means trading can never be halted remotely for this process's
+  lifetime, only by stopping it. Set `REQUIRE_KILL_SWITCH=true` to refuse to start in that state instead.
 
 ### Replay
 

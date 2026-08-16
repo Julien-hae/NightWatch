@@ -33,6 +33,7 @@ class NightwatchMetrics:
     kill_switch_toggles_total: Counter = field(init=False)
     kill_switch_trading_enabled: Gauge = field(init=False)
     kill_switch_ready: Gauge = field(init=False)
+    kill_switch_available: Gauge = field(init=False)
     signals_duplicates_total: Counter = field(init=False)
     orders_created_total: Counter = field(init=False)
     orders_filled_total: Counter = field(init=False)
@@ -154,6 +155,13 @@ class NightwatchMetrics:
             "kill_switch_ready",
             "1 once the JetStream control backlog has been drained and the kill switch state "
             "restored; 0 means every tick is being suppressed regardless of trading_enabled",
+            registry=self.registry,
+        )
+        self.kill_switch_available = Gauge(
+            "kill_switch_available",
+            "1 when NATS_SERVERS is configured so the kill switch can receive commands; "
+            "0 means trading can never be halted remotely for this process's lifetime, "
+            "only by stopping it",
             registry=self.registry,
         )
         self.signals_duplicates_total = Counter(
