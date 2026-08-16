@@ -1,0 +1,48 @@
+[
+  {
+    "type": "signal",
+    "symbol": "BTC/USD",
+    "side": "BUY",
+    "strategy": "momentum_burst_v1",
+    "strength": 12.0,
+    "delta_pct": 12.0
+  },
+  {
+    "type": "order",
+    "symbol": "BTC/USD",
+    "side": "BUY",
+    "qty": "0.001785714285714285714285714286",
+    "status": "NEW"
+  },
+  {
+    "type": "fill",
+    "symbol": "BTC/USD",
+    "side": "BUY",
+    "qty": "0.001785714285714285714285714286",
+    "price": "56000",
+    "fee": "0.1000000000000000000000000000"
+  },
+  {
+    "type": "signal",
+    "symbol": "BTC/USD",
+    "side": "SELL",
+    "strategy": "momentum_burst_v1",
+    "strength": 11.607142857142858,
+    "delta_pct": -11.607142857142858
+  },
+  {
+    "type": "order",
+    "symbol": "BTC/USD",
+    "side": "SELL",
+    "qty": "0.001785714285714285714285714286",
+    "status": "NEW"
+  },
+  {
+    "type": "fill",
+    "symbol": "BTC/USD",
+    "side": "SELL",
+    "qty": "0.001785714285714285714285714286",
+    "price": "49500",
+    "fee": "0.08839285714285714285714285716"
+  }
+]

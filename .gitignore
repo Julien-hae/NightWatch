@@ -160,3 +160,4 @@ out.csv
 dependency-check-report.*
 *.env
 *.jsonl
+!tests/golden/*.jsonl
