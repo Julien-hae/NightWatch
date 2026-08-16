@@ -157,7 +157,13 @@ curl -s http://localhost:8000/healthz | jq
   `RuntimeError` otherwise); everything else has a default (see *Environment
   variables*).
 - A gitignored `credentials.env` is auto-loaded via `python-dotenv` on import of
-  `models/nats_config.py` if present — no `.env.example` exists today.
+  `models/nats_config.py` if present. `.env.example` documents the three secrets
+  `docker-compose.yml` reads from the environment (`POSTGRES_PASSWORD`, `NATS_TOKEN`,
+  `GRAFANA_ADMIN_PASSWORD`) — copy it to `.env` and set real values before running
+  anywhere reachable beyond your own machine; the compose file's own defaults
+  (`tradepass` / `devtoken-change-me` / `admin`) are for local dev only. Every service's
+  port is bound to `127.0.0.1` in the shipped compose file, not `0.0.0.0` — `nats` also
+  requires `NATS_TOKEN` (`--auth`) to connect, including from `nats pub`/admin tooling.
 
 ## Quality gates
 
