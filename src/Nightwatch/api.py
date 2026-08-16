@@ -84,7 +84,14 @@ def create_app(  # noqa: PLR0915
 
         if _nats is not None:
             try:
-                await _nats.connect()
+                # Only a fully closed client should trigger a manual connect() — calling it on an
+                # already-connected client (e.g. one main.py connected itself before injecting it
+                # here) races nats-py's own internal read loop. Confirmed live: this produced a
+                # RuntimeError from nats-py's _read_loop on every real startup before this guard,
+                # and silently wiped the disconnect/reconnect callbacks main.py had wired up for
+                # this connector (nats-py's connect() unconditionally reassigns them).
+                if _nats.client.is_closed:
+                    await _nats.connect()
                 _health.nats_connected = _nats.client.is_connected
             except Exception as exc:  # noqa: BLE001
                 LOGGER.warning("NATS startup connect failed: %s", exc)

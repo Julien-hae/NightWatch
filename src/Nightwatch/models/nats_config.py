@@ -31,7 +31,11 @@ class NatsConnectionConfig(BaseModel):
     servers: list[str] = Field(default_factory=_default_servers)
     allow_reconnect: bool = True
     max_reconnect_attempts: int = -1
-    reconnect_time_wait: float = 0.2
+    # 2s, not nats-py's more aggressive default: a real NATS outage was observed producing
+    # ~5 reconnect attempts/second per connection (3 connections = ~15/s), each logging an
+    # ERROR-level traceback — a costly, noisy volume in Loki for an outage of any length.
+    # Tests that need fast reconnection for their own timing pass an explicit override.
+    reconnect_time_wait: float = 2.0
     ping_interval: int = 10
     max_outstanding_pings: int = 2
     token: str | None = Field(default_factory=lambda: os.environ.get("NATS_TOKEN", None))

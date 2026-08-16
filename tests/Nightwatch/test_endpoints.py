@@ -2,7 +2,7 @@
 
 import os
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -137,6 +137,38 @@ class TestHealthEndpointWithDatabase(unittest.TestCase):
             self.assertEqual(metrics.db_up._value.get(), 1.0, "db_up must recover once the ping succeeds again")
         finally:
             client.close()
+
+
+class TestStartupNatsConnectGuard(unittest.TestCase):
+    """create_app's startup handler must not re-connect an already-connected NATS client.
+
+    Calling connect() on a client that isn't fully closed races nats-py's own internal
+    reconnect loop and, confirmed live, silently wipes the disconnect/reconnect callbacks
+    a caller (main.py) already wired up on that connector.
+    """
+
+    def _make_mock_nats(self, *, is_closed: bool) -> MagicMock:
+        mock_nats = MagicMock()
+        mock_nats.client.is_closed = is_closed
+        mock_nats.client.is_connected = not is_closed
+        mock_nats.connect = AsyncMock()
+        return mock_nats
+
+    def test_skips_connect_when_client_already_connected(self) -> None:
+        mock_nats = self._make_mock_nats(is_closed=False)
+
+        with TestClient(create_app(nats=mock_nats, metrics=NightwatchMetrics())):
+            pass
+
+        mock_nats.connect.assert_not_awaited()
+
+    def test_connects_when_client_is_closed(self) -> None:
+        mock_nats = self._make_mock_nats(is_closed=True)
+
+        with TestClient(create_app(nats=mock_nats, metrics=NightwatchMetrics())):
+            pass
+
+        mock_nats.connect.assert_awaited_once()
 
 
 class TestMetricsEndpoint(unittest.TestCase):

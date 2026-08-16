@@ -255,15 +255,18 @@ backstop, not the fast feedback loop.
   (`MarketTickRecorder`) are dead code in production** — nothing in this repo
   subscribes to the `market.tick.*` subjects `MarketTickPublisher` broadcasts, and
   nothing calls the JSONL recorder. Both remain fully unit-tested but unwired.
-- **`api.py`'s startup handler double-connects an already-connected NATS client**:
-  `main.py` connects `nats_connector` itself in `_connect_nats()`, then passes that
-  *already-connected* instance into `create_app(nats=nats_connector, ...)`, whose own
-  `@app.on_event("startup")` unconditionally calls `await _nats.connect()` again.
-  `nats-py` logs an internal `ERROR: nats: encountered error (TimeoutError)` for this
-  redundant connect on every real startup — harmless in practice (`/healthz` re-reads
-  `client.is_connected` live on every request and settles to `true`), but noisy and
-  worth fixing by only connecting in `create_app`'s startup handler when the injected
-  connector isn't already connected.
+- **Fixed**: `api.py`'s startup handler used to unconditionally call `await _nats.connect()`
+  even when `main.py` had already connected `nats_connector` itself before injecting it via
+  `create_app(nats=nats_connector, ...)`. That raced nats-py's own internal read loop —
+  reproduced live as `RuntimeError: read() called while another coroutine is already
+  waiting for incoming data` on every real startup — and silently wiped the
+  disconnect/reconnect callbacks `main.py` had wired up for that connector (nats-py's
+  `connect()` unconditionally reassigns them), so `nats_disconnects_total{connection="nats_connector"}`
+  / `nats_reconnects_total{connection="nats_connector"}` never fired. The startup handler
+  (and `ControlEventPublisher.setup_stream()`, same bug) now guard with `client.is_closed`,
+  consistent with the rule described above in *Architecture* for every other connector in
+  `messaging/`. Verified live: the RuntimeError is gone and all three connections' reconnect
+  metrics now fire correctly after a forced NATS outage.
 - **mypy is pinned to `~1.8` in `pyproject.toml` but nothing in the code requires
   it** — the one issue that used to force the pin (`UTCFormatter.converter` typing in
   `common/logging_configuration.py`) is fixed at the source. The pin is unexercised
