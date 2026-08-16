@@ -1,0 +1,4 @@
+{"timestamp":"2026-01-01T00:00:00Z","symbol":"BTC/USD","price":"50000","source":"golden_fixture","schema_version":1}
+{"timestamp":"2026-01-01T00:00:05Z","symbol":"BTC/USD","price":"56000","source":"golden_fixture","schema_version":1}
+{"timestamp":"2026-01-01T00:00:36Z","symbol":"BTC/USD","price":"56000","source":"golden_fixture","schema_version":1}
+{"timestamp":"2026-01-01T00:00:40Z","symbol":"BTC/USD","price":"49500","source":"golden_fixture","schema_version":1}
