@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import logging
 import uuid
+from datetime import datetime
 from decimal import Decimal
 
 import asyncpg  # type: ignore[import-untyped]
 
-from Nightwatch.db.repositories import OrderCreateResult
+from Nightwatch.db.repositories import KillSwitchState, OrderCreateResult
 from Nightwatch.metrics.metrics import NightwatchMetrics
 from Nightwatch.models.fill import Fill
 from Nightwatch.models.order import Order
@@ -342,6 +343,63 @@ class PgProcessingCursorRepo:
         try:
             async with self._pool.acquire() as conn:
                 await conn.execute(sql, signal_id)
+        except Exception:
+            _record_write_error(self._metrics)
+            raise
+
+
+class PgKillSwitchStateRepo:
+    """Postgres repository for the durable kill-switch state (single-row).
+
+    Backs up the JetStream ``CONTROL`` stream: its bounded retention (10k
+    messages / 24h) means a kill command in effect longer than that window
+    can silently vanish from the backlog a restart drains. This repo lets a
+    restart fall back to the last state recorded here instead of defaulting
+    to trading enabled.
+    """
+
+    def __init__(self, pool: asyncpg.Pool, metrics: NightwatchMetrics | None = None) -> None:
+        """Initialise with an asyncpg connection pool.
+
+        Args:
+            pool: Shared asyncpg connection pool.
+            metrics: Optional metrics instance used to count write failures.
+        """
+        self._pool = pool
+        self._metrics = metrics
+
+    async def get(self) -> KillSwitchState | None:
+        """Return the last persisted kill-switch state, or None if never saved.
+
+        Returns:
+            A :class:`KillSwitchState`, or ``None`` when no row exists yet.
+        """
+        sql = "SELECT trading_enabled, reason, updated_at FROM kill_switch_state WHERE id = 1"
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(sql)
+        if row is None:
+            return None
+        return KillSwitchState(trading_enabled=row["trading_enabled"], reason=row["reason"], updated_at=row["updated_at"])
+
+    async def save(self, *, trading_enabled: bool, reason: str, updated_at: datetime) -> None:
+        """Persist or update the single-row kill-switch state.
+
+        Args:
+            trading_enabled: Whether trading is currently enabled.
+            reason: Human-readable reason for the current state.
+            updated_at: Timestamp the state last changed.
+        """
+        sql = """
+            INSERT INTO kill_switch_state (id, trading_enabled, reason, updated_at)
+            VALUES (1, $1, $2, $3)
+            ON CONFLICT (id) DO UPDATE
+                SET trading_enabled = EXCLUDED.trading_enabled,
+                    reason = EXCLUDED.reason,
+                    updated_at = EXCLUDED.updated_at
+        """
+        try:
+            async with self._pool.acquire() as conn:
+                await conn.execute(sql, trading_enabled, reason, updated_at)
         except Exception:
             _record_write_error(self._metrics)
             raise

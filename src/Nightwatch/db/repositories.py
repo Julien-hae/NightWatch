@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING, Protocol
@@ -82,6 +83,32 @@ class AsyncTradeWriter(Protocol):
         equity: Decimal,
     ) -> object:
         """Persist the trade in a single DB transaction."""
+
+
+@dataclass(frozen=True)
+class KillSwitchState:
+    """Durable snapshot of the kill switch's last known state."""
+
+    trading_enabled: bool
+    reason: str
+    updated_at: datetime
+
+
+class AsyncKillSwitchStateRepo(Protocol):
+    """Async persistence port for the kill switch's durable state.
+
+    Backs up the JetStream ``CONTROL`` stream, whose retention (10k messages /
+    24h) means a kill command in effect longer than that window can silently
+    disappear from the backlog a restart drains. This repo lets a restart fall
+    back to the last Postgres-recorded state instead of defaulting to
+    trading enabled.
+    """
+
+    async def get(self) -> KillSwitchState | None:
+        """Return the last persisted kill-switch state, or None if never saved."""
+
+    async def save(self, *, trading_enabled: bool, reason: str, updated_at: datetime) -> None:
+        """Persist the latest kill-switch state."""
 
 
 @dataclass
@@ -214,6 +241,22 @@ class InMemoryPositionRepo:
     def upsert(self, position: Position) -> None:
         """Insert or replace quantity for ``position.symbol``."""
         self._positions[position.symbol] = position.qty
+
+
+class InMemoryKillSwitchStateRepo:
+    """In-memory kill-switch state store, for tests that don't need real Postgres."""
+
+    def __init__(self) -> None:
+        """Initialize with no persisted state."""
+        self._state: KillSwitchState | None = None
+
+    async def get(self) -> KillSwitchState | None:
+        """Return the last saved state, or None if ``save`` was never called."""
+        return self._state
+
+    async def save(self, *, trading_enabled: bool, reason: str, updated_at: datetime) -> None:
+        """Replace the stored state with the given values."""
+        self._state = KillSwitchState(trading_enabled=trading_enabled, reason=reason, updated_at=updated_at)
 
 
 class InMemoryPortfolioRepo:

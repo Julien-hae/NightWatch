@@ -29,7 +29,13 @@ stop-event waiter. **Startup order matters:**
    kill-switch state from the **latest** JetStream control event before anything else
    runs — this closes the gap where a kill sent right before a crash could be lost.
    Until this completes, `KillSwitch.ready == False` and **every** tick is suppressed.
-   If `NATS_SERVERS` is unset, the kill switch is marked ready immediately and trading
+   If the backlog is empty (fresh stream, **or** the last control event fell outside the
+   `CONTROL` stream's own retention window — 10k msgs / 24h, see
+   `control_event_publisher.py`), `main.py::_restore_kill_switch_from_postgres()` falls
+   back to the last state recorded in the `kill_switch_state` table instead of defaulting
+   to `trading_enabled=True`; every applied control event (from backlog drain or the live
+   subscription) is mirrored to that table so this fallback stays current. If
+   `NATS_SERVERS` is unset, the kill switch is marked ready immediately and trading
    is never gated (no kill switch available).
 4. FastAPI app + Kraken adapter start; ticks flow in.
 
@@ -124,7 +130,8 @@ tests/
                                     (alembic_cfg, database_url_or_skip, RESET_DB_SQL)
 
 migrations/versions/                Alembic: 0001 signals/orders/fills/positions/equity_snapshots,
-                                    0002 portfolio_state, 0003 processing_cursor
+                                    0002 portfolio_state, 0003 processing_cursor,
+                                    0004 kill_switch_state (Postgres fallback past JetStream retention)
 grafana/dashboards/                 bot_health.json, trading.json, nightwatch-overview.json
 grafana/provisioning/               datasource.yml (Prometheus), dashboards.yml (file provider)
 promtail.yml                        ships trade-service container logs -> Loki (needs LOG_FORMAT=json)
@@ -185,7 +192,8 @@ without also replacing the runner everywhere (CI, pre-commit, `pyproject.toml`).
 
 DB-touching files: `test_integration_database.py`, `test_integration_pg_repositories.py`,
 `test_integration_migrations.py`, `test_integration_smoke_restart.py`,
-`test_integration_transactional_ack.py`, `test_integration_paper_trader.py`. They
+`test_integration_transactional_ack.py`, `test_integration_paper_trader.py`,
+`test_integration_kill_switch_persistence.py` (also needs `nats-server` on `PATH`). They
 `unittest.skipUnless` themselves out when `DATABASE_URL` is absent.
 
 **CI gap**: `.github/workflows/ci.yml`'s `integration` job installs `nats-server` but

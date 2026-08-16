@@ -22,6 +22,7 @@ import os
 import signal
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from decimal import Decimal
 
 import uvicorn
@@ -31,7 +32,7 @@ from Nightwatch.api import create_app
 from Nightwatch.common.logging_configuration import configure_logger
 from Nightwatch.db.bootstrap import PersistenceContext, bootstrap_persistence
 from Nightwatch.db.database import DatabaseConnector
-from Nightwatch.db.repositories import PaperTraderRepos
+from Nightwatch.db.repositories import AsyncKillSwitchStateRepo, PaperTraderRepos
 from Nightwatch.messaging.control_event_subscriber import ControlEventSubscriber
 from Nightwatch.messaging.nats_connection import NatsConnector
 from Nightwatch.messaging.publisher import MarketTickPublisher
@@ -118,10 +119,37 @@ def _nats_reconnect_callbacks(
     return _on_disconnected, _on_reconnected
 
 
+async def _restore_kill_switch_from_postgres(
+    kill_switch: KillSwitch,
+    kill_switch_state_repo: AsyncKillSwitchStateRepo,
+) -> None:
+    """Fall back to the last Postgres-recorded kill-switch state.
+
+    Called only when the JetStream backlog drain found nothing to apply —
+    either a fresh control stream, or (more dangerously) a kill command whose
+    stream retention (10k messages / 24h) has since lapsed. An empty backlog
+    is not evidence that trading was never killed, so this checks Postgres
+    before letting ``KillSwitch`` fall back to its own ``trading_enabled=True``
+    default.
+    """
+    persisted = await kill_switch_state_repo.get()
+    if persisted is None:
+        LOGGER.info("No persisted kill-switch state in Postgres either; defaulting to trading_enabled=True.")
+        return
+    LOGGER.warning(
+        "JetStream control backlog was empty (fresh stream, or the last control event fell outside its "
+        "retention window); restoring kill-switch state from Postgres instead: trading_enabled=%s reason=%s",
+        persisted.trading_enabled,
+        persisted.reason,
+    )
+    kill_switch.apply(BotControlEvent(kill=not persisted.trading_enabled, reason=persisted.reason, timestamp=persisted.updated_at))
+
+
 async def _connect_nats(
     cfg: RunConfig,
     kill_switch: KillSwitch,
     metrics: NightwatchMetrics,
+    kill_switch_state_repo: AsyncKillSwitchStateRepo | None = None,
 ) -> tuple[NatsConnector, ControlEventSubscriber, MarketTickPublisher] | None:
     """Connect NATS + control subscriber + tick publisher, drain backlog. Return ``None`` if disabled."""
     if not cfg.nats_servers:
@@ -143,9 +171,22 @@ async def _connect_nats(
 
     async def _on_control(event: BotControlEvent) -> None:
         kill_switch.apply(event)
+        if kill_switch_state_repo is not None:
+            await kill_switch_state_repo.save(trading_enabled=not event.kill, reason=event.reason, updated_at=event.timestamp)
 
     drained = await control_sub.drain_backlog(kill_switch)
     LOGGER.info("Drained %d backlog control event(s)", drained)
+    if kill_switch_state_repo is not None:
+        if drained:
+            # Mirror the restored state into Postgres so a *future* restart, after this
+            # event has aged out of JetStream's retention window, still recovers it.
+            await kill_switch_state_repo.save(
+                trading_enabled=kill_switch.trading_enabled,
+                reason="restored from JetStream backlog",
+                updated_at=datetime.now(timezone.utc),
+            )
+        else:
+            await _restore_kill_switch_from_postgres(kill_switch, kill_switch_state_repo)
     await control_sub.subscribe(cb=_on_control)
 
     tick_publisher = MarketTickPublisher(config=nats_config, metrics=metrics)
@@ -263,7 +304,7 @@ async def _run() -> None:
         paper_trader=paper_trader,
     )
 
-    nats_bundle = await _connect_nats(cfg, kill_switch, metrics)
+    nats_bundle = await _connect_nats(cfg, kill_switch, metrics, persistence.kill_switch_state_repo)
     nats_connector = nats_bundle[0] if nats_bundle else None
     control_sub = nats_bundle[1] if nats_bundle else None
     tick_publisher = nats_bundle[2] if nats_bundle else None
