@@ -7,6 +7,7 @@ replay.py's publisher regardless of --capture-file); no database involved since 
 pipeline uses PaperTrader's in-memory-only sync path.
 """
 
+import json
 import os
 import tempfile
 import unittest
@@ -81,6 +82,33 @@ class TestReplayCaptureIntegration(unittest.TestCase):
         self.assertEqual(first_run, second_run)
         self.assertIn('"type": "signal"', first_run)
         self.assertIn('"type": "fill"', first_run)
+
+    def test_sell_signal_without_position_is_captured_without_order_or_fill(self) -> None:
+        """A SELL signal with no held position yields a captured `signal` event but no `order`/`fill`.
+
+        ``create_order_from_signal`` returns ``None`` for a SELL with no position (see
+        ``models/order_factory.py``), so the pipeline never reaches ``PaperTrader.process_signal``'s
+        order/fill capture calls. This is the "no-op" branch the happy-path golden fixture doesn't cover.
+        """
+        start = datetime.now(timezone.utc)
+        recorder = MarketTickRecorder(path=self.path)
+        recorder.record_ticks(
+            [
+                make_tick(price=Decimal("50000"), timestamp=start),
+                make_tick(price=Decimal("30000"), timestamp=start + timedelta(seconds=1)),
+            ],
+        )
+        capture_path = os.path.join(self.temp_dir.name, "capture.json")
+
+        with patch.dict(os.environ, _CAPTURE_ENV):
+            main(["--file", self.path, "--speed", "fast", "--capture-file", capture_path])
+
+        with open(capture_path, encoding="utf-8") as fh:
+            events = json.load(fh)
+
+        types = [event["type"] for event in events]
+        self.assertEqual(types, ["signal"])
+        self.assertEqual(events[0]["side"], "SELL")
 
 
 if __name__ == "__main__":
