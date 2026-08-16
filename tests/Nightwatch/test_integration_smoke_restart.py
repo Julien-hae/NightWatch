@@ -39,6 +39,7 @@ class TestRestartRestoreSmoke(unittest.TestCase):
     """Prove that a full trade survives a simulated process restart."""
 
     database_url: str
+    loop: asyncio.AbstractEventLoop
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -54,8 +55,19 @@ class TestRestartRestoreSmoke(unittest.TestCase):
         command.upgrade(alembic_cfg(sync_url), "head")
         engine.dispose()
 
+        # A dedicated, explicit loop (rather than the deprecated get_event_loop()) keeps this
+        # class isolated from whatever event-loop state an earlier test file in the same
+        # discovery run left behind — get_event_loop() raised "There is no current event loop"
+        # here when run after test_integration_migrations.py in a full `discover` run.
+        cls.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(cls.loop)
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.loop.close()
+
     def _run(self, coro: Coroutine[Any, Any, _T]) -> _T:
-        return asyncio.get_event_loop().run_until_complete(coro)
+        return self.loop.run_until_complete(coro)
 
     def test_trade_then_restart_restores_state(self) -> None:
         """Run a trade through one pipeline, tear it down, restore in a second."""

@@ -13,16 +13,16 @@ from Nightwatch.models.service_health import ServiceHealth
 
 
 class _StubDatabase(DatabaseConnector):
-    """DatabaseConnector test double returning a fixed ping result."""
+    """DatabaseConnector test double whose ping result can change between calls."""
 
     def __init__(self, result: bool) -> None:
         super().__init__(database_url="postgresql://stub/stub")
-        self._result = result
+        self.result = result
         self.calls = 0
 
     async def ping(self) -> bool:
         self.calls += 1
-        return self._result
+        return self.result
 
 
 class TestHealthEndpoint(unittest.TestCase):
@@ -114,6 +114,29 @@ class TestHealthEndpointWithDatabase(unittest.TestCase):
         body = response.json()
         self.assertFalse(body["ok"])
         self.assertFalse(body["db_connected"])
+
+    def test_db_up_metric_tracks_live_outage_with_externally_injected_database(self) -> None:
+        """db_up must update on every poll, matching main.py's real wiring: a pre-built
+        DatabaseConnector passed in via database=, not bootstrapped by create_app itself
+        (that internal-bootstrap path is the only one the old code kept db_up in sync with).
+        """
+        health = ServiceHealth(ws_connected=True, nats_connected=True, db_connected=True)
+        db = _StubDatabase(result=True)
+        metrics = NightwatchMetrics()
+        client = TestClient(create_app(health=health, metrics=metrics, database=db))
+        try:
+            client.get("/healthz")
+            self.assertEqual(metrics.db_up._value.get(), 1.0)
+
+            db.result = False
+            client.get("/healthz")
+            self.assertEqual(metrics.db_up._value.get(), 0.0, "db_up must flip to 0 on a live outage, not stay frozen")
+
+            db.result = True
+            client.get("/healthz")
+            self.assertEqual(metrics.db_up._value.get(), 1.0, "db_up must recover once the ping succeeds again")
+        finally:
+            client.close()
 
 
 class TestMetricsEndpoint(unittest.TestCase):

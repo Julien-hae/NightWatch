@@ -37,7 +37,13 @@ stop-event waiter. **Startup order matters:**
    kill-switch state from the **latest** JetStream control event before anything else
    runs — this closes the gap where a kill sent right before a crash could be lost.
    Until this completes, `KillSwitch.ready == False` and **every** tick is suppressed.
-   If `NATS_SERVERS` is unset, the kill switch is marked ready immediately and trading
+   If the backlog is empty (fresh stream, **or** the last control event fell outside the
+   `CONTROL` stream's own retention window — 10k msgs / 24h, see
+   `control_event_publisher.py`), `main.py::_restore_kill_switch_from_postgres()` falls
+   back to the last state recorded in the `kill_switch_state` table instead of defaulting
+   to `trading_enabled=True`; every applied control event (from backlog drain or the live
+   subscription) is mirrored to that table so this fallback stays current. If
+   `NATS_SERVERS` is unset, the kill switch is marked ready immediately and trading
    is never gated (no kill switch available).
 4. FastAPI app + Kraken adapter start; ticks flow in.
 
@@ -125,16 +131,21 @@ src/Nightwatch/
 
 tests/
   Nightwatch/                       unittest test_*.py, mirrors src/ + "infra as code" tests
-                                    (test_grafana_compose_wiring.py, test_prometheus_compose_wiring.py) that assert
-                                    on docker-compose.yml / grafana provisioning files as plain text
+                                    (test_grafana_compose_wiring.py, test_prometheus_compose_wiring.py,
+                                    test_grafana_alerting_provisioning.py) that assert on docker-compose.yml /
+                                    grafana provisioning files as plain text
   fixtures/                         make_tick/make_signal/make_order/make_fill/make_risk_decision/make_portfolio
                                     factories; NatsServerFixture (spawns a real nats-server process); db.py
                                     (alembic_cfg, database_url_or_skip, RESET_DB_SQL)
 
 migrations/versions/                Alembic: 0001 signals/orders/fills/positions/equity_snapshots,
-                                    0002 portfolio_state, 0003 processing_cursor
+                                    0002 portfolio_state, 0003 processing_cursor,
+                                    0004 kill_switch_state (Postgres fallback past JetStream retention)
 grafana/dashboards/                 bot_health.json, trading.json, nightwatch-overview.json
-grafana/provisioning/               datasource.yml (Prometheus), dashboards.yml (file provider)
+grafana/provisioning/               datasource.yml (Prometheus + Loki, explicit uids), dashboards.yml
+                                    (file provider), alerting/rules.yml (Grafana unified alerting — no
+                                    Alertmanager needed: trade-service-down and postgres-unreachable,
+                                    both alert-on-no-data, 2m debounce)
 promtail.yml                        ships trade-service container logs -> Loki (needs LOG_FORMAT=json)
 docker-compose.yml                  trade-db (pg16) + nats(+JetStream) + trade-service + loki +
                                     promtail + prometheus + grafana
@@ -165,7 +176,13 @@ curl -s http://localhost:8000/healthz | jq
   `RuntimeError` otherwise); everything else has a default (see *Environment
   variables*).
 - A gitignored `credentials.env` is auto-loaded via `python-dotenv` on import of
-  `models/nats_config.py` if present — no `.env.example` exists today.
+  `models/nats_config.py` if present. `.env.example` documents the three secrets
+  `docker-compose.yml` reads from the environment (`POSTGRES_PASSWORD`, `NATS_TOKEN`,
+  `GRAFANA_ADMIN_PASSWORD`) — copy it to `.env` and set real values before running
+  anywhere reachable beyond your own machine; the compose file's own defaults
+  (`tradepass` / `devtoken-change-me` / `admin`) are for local dev only. Every service's
+  port is bound to `127.0.0.1` in the shipped compose file, not `0.0.0.0` — `nats` also
+  requires `NATS_TOKEN` (`--auth`) to connect, including from `nats pub`/admin tooling.
 
 ## Quality gates
 
@@ -196,12 +213,14 @@ DB-touching files: `test_integration_database.py`, `test_integration_pg_reposito
 `test_integration_transactional_ack.py`, `test_integration_paper_trader.py`,
 `test_integration_singleton_lock.py`. They `unittest.skipUnless` themselves out when
 `DATABASE_URL` is absent.
+`test_integration_kill_switch_persistence.py` (also needs `nats-server` on `PATH`). They
+`unittest.skipUnless` themselves out when `DATABASE_URL` is absent.
 
-**CI gap**: `.github/workflows/ci.yml`'s `integration` job installs `nats-server` but
-never starts Postgres or sets `DATABASE_URL` — the six files above self-skip in CI
-today and only actually run locally. A green CI run does not mean the Postgres path
-was exercised; run them locally against `docker compose up trade-db` before trusting
-DB-layer changes.
+`.github/workflows/ci.yml`'s `integration` job runs a `postgres:16-alpine` service
+container (health-checked, `DATABASE_URL` set at the job level) alongside `nats-server`,
+so all six files above actually run in CI, not just locally. If you're touching the DB
+layer, still run them locally against `docker compose up trade-db` first — CI is the
+backstop, not the fast feedback loop.
 
 ## Code conventions
 

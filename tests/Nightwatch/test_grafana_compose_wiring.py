@@ -21,7 +21,7 @@ class TestGrafanaComposeWiring(unittest.TestCase):
 
         self.assertIn("  grafana:\n", compose_text)
         self.assertIn("    image: grafana/grafana:11.1.4\n", compose_text)
-        self.assertIn('      - "3000:3000"\n', compose_text)
+        self.assertIn('      - "127.0.0.1:3000:3000"\n', compose_text)
         self.assertIn("./grafana/provisioning:/etc/grafana/provisioning:ro", compose_text)
         self.assertIn("/api/health", compose_text)
 
@@ -62,6 +62,15 @@ class TestGrafanaComposeWiring(unittest.TestCase):
         self.assertIn("parse_errors_total", dashboard_text)
         self.assertIn('up{job=\\"trade-service\\"}', dashboard_text)
 
+    def test_bot_health_dashboard_shows_kill_switch_state(self) -> None:
+        """The kill switch's current state must be visible on a dashboard, not just a toggle counter."""
+        dashboard_text = BOT_HEALTH_JSON_PATH.read_text()
+
+        self.assertIn('"title": "Kill Switch Ready"', dashboard_text)
+        self.assertIn("kill_switch_ready", dashboard_text)
+        self.assertIn('"title": "Trading Enabled"', dashboard_text)
+        self.assertIn("kill_switch_trading_enabled", dashboard_text)
+
     def test_trading_dashboard_exists_with_expected_panels(self) -> None:
         self.assertTrue(TRADING_JSON_PATH.exists(), msg="Trading dashboard JSON is missing")
         dashboard_text = TRADING_JSON_PATH.read_text()
@@ -85,7 +94,7 @@ class TestLokiComposeWiring(unittest.TestCase):
 
         self.assertIn("  loki:\n", compose_text)
         self.assertIn("    image: grafana/loki:3.1.0\n", compose_text)
-        self.assertIn('      - "3100:3100"\n', compose_text)
+        self.assertIn('      - "127.0.0.1:3100:3100"\n', compose_text)
         self.assertIn("/etc/loki/local-config.yaml", compose_text)
         self.assertIn("/ready", compose_text)
 

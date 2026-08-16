@@ -17,6 +17,7 @@ from Nightwatch.db.pg_repositories import (
     PgAtomicTradeWriter,
     PgEquitySnapshotRepo,
     PgFillRepo,
+    PgKillSwitchStateRepo,
     PgOrderRepo,
     PgPortfolioStateRepo,
     PgPositionRepo,
@@ -56,6 +57,7 @@ class PersistenceContext:
     portfolio_state_repo: PgPortfolioStateRepo
     equity_snapshot_repo: PgEquitySnapshotRepo
     processing_cursor_repo: PgProcessingCursorRepo
+    kill_switch_state_repo: PgKillSwitchStateRepo
     trade_writer: PgAtomicTradeWriter
     _lock_connection: asyncpg.Connection
 
@@ -167,6 +169,7 @@ async def bootstrap_persistence(
         portfolio_state_repo=PgPortfolioStateRepo(pool, metrics=metrics),
         equity_snapshot_repo=PgEquitySnapshotRepo(pool, metrics=metrics),
         processing_cursor_repo=PgProcessingCursorRepo(pool, metrics=metrics),
+        kill_switch_state_repo=PgKillSwitchStateRepo(pool, metrics=metrics),
         trade_writer=PgAtomicTradeWriter(pool, metrics=metrics),
         _lock_connection=lock_connection,
     )

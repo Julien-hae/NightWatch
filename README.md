@@ -114,6 +114,14 @@ the full architecture).
 - `equity` (gauge): current total equity (cash + position value)
 - `fees_paid_total` (counter): cumulative fees paid by the paper portfolio
 
+### Safety
+
+- `kill_switch_trading_enabled` (gauge): 1 when the kill switch currently allows trading, 0 when
+  trading is killed. Reflects the *current* state — see `kill_switch_toggles_total` (counter) for
+  how often it has changed.
+- `kill_switch_ready` (gauge): 1 once the JetStream control backlog has been drained and kill-switch
+  state restored; 0 means every tick is being suppressed regardless of `kill_switch_trading_enabled`.
+
 ### Replay
 
 - `replay_ticks_total{symbol}` (counter): total ticks republished to NATS by the `replay` CLI, per symbol

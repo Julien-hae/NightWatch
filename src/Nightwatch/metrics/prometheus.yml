@@ -5,6 +5,11 @@ global:
   # scrape_timeout is set to the global default (10s).
 
 # Alertmanager configuration
+#
+# No Alertmanager is deployed in this stack — alerting is handled by Grafana's
+# unified alerting instead (see grafana/provisioning/alerting/rules.yml), which
+# queries this Prometheus datasource directly and needs no separate component.
+# If a standalone Alertmanager is ever added, wire its target here too.
 alerting:
   alertmanagers:
     - static_configs:
